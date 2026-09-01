@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "FaceNet // Biometric Verification & Blockchain Attestation",
+  title: "FaceNet",
   description: "Reverse Visual Search → Ganache EVM Ledger",
 };
 
