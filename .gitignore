@@ -1,0 +1,27 @@
+# Python / Backend
+backend/venv/
+backend/.venv/
+backend/__pycache__/
+backend/*/__pycache__/
+*.py[cod]
+*$py.class
+backend/.pytest_cache/
+
+# Node / Frontend
+task3-web/node_modules/
+task3-web/.next/
+task3-web/out/
+task3-web/build/
+task3-web/*.tsbuildinfo
+
+# Environment variables
+.env
+.env*.local
+*.env
+
+# IDE / OS
+.DS_Store
+*.pem
+*.log
+.vscode/
+.idea/
