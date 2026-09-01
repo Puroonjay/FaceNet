@@ -60,171 +60,204 @@ def _get_face_detector(w: int, h: int):
     return (None, None)
 
 
-def detect_and_crop_face(image_bytes: bytes) -> Tuple[bytes, Dict[str, Any]]:
+from serpapi import GoogleSearch
+
+
+def _get_cascade_classifier():
     """
-    Detects frontal face using OpenCV YuNet or Haar Cascade.
-    If a face is found, crops with a 15% margin and encodes to JPEG bytes.
-    Returns (cropped_bytes, detection_metadata).
+    Locates and initializes haarcascade_frontalface_default.xml.
     """
-    if not image_bytes:
-        return image_bytes, {"face_detected": False, "bounding_box": None, "image_dimensions": [0, 0]}
+    if not hasattr(cv2, "CascadeClassifier"):
+        return None
 
-    try:
-        nparr = np.frombuffer(image_bytes, np.uint8)
-        img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+    possible_paths = [
+        getattr(cv2.data, "haarcascades", "") + "haarcascade_frontalface_default.xml" if hasattr(cv2, "data") else "",
+        str(Path(__file__).resolve().parent / "cascades" / "haarcascade_frontalface_default.xml"),
+        str(Path.cwd() / "cascades" / "haarcascade_frontalface_default.xml"),
+    ]
 
-        if img is None:
-            return image_bytes, {"face_detected": False, "bounding_box": None, "image_dimensions": [0, 0]}
+    for p in possible_paths:
+        if p and os.path.exists(p):
+            try:
+                clf = cv2.CascadeClassifier(p)
+                if not clf.empty():
+                    return clf
+            except Exception:
+                continue
 
-        h_img, w_img = int(img.shape[0]), int(img.shape[1])
-
-        det_type, detector = _get_face_detector(w_img, h_img)
-        faces = []
-
-        if det_type == "yunet" and detector is not None:
-            _, results = detector.detect(img)
-            if results is not None and len(results) > 0:
-                # Results format: [x, y, w, h, x_re, y_re, ...]
-                for det in results:
-                    x, y, w, h = int(det[0]), int(det[1]), int(det[2]), int(det[3])
-                    faces.append((x, y, w, h))
-        elif det_type == "cascade" and detector is not None:
-            gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-            raw_faces = detector.detectMultiScale(
-                gray,
-                scaleFactor=1.1,
-                minNeighbors=4,
-                minSize=(30, 30),
-            )
-            for (x, y, w, h) in raw_faces:
-                faces.append((int(x), int(y), int(w), int(h)))
-
-        if len(faces) > 0:
-            # Select the largest face by area
-            x, y, w, h = max(faces, key=lambda b: b[2] * b[3])
-
-            # 15% margin expansion
-            margin_x = int(w * 0.15)
-            margin_y = int(h * 0.15)
-
-            x1 = max(0, x - margin_x)
-            y1 = max(0, y - margin_y)
-            x2 = min(w_img, x + w + margin_x)
-            y2 = min(h_img, y + h + margin_y)
-
-            cropped = img[y1:y2, x1:x2]
-            success, encoded_buf = cv2.imencode(".jpg", cropped)
-            if success:
-                cropped_bytes = encoded_buf.tobytes()
-                return cropped_bytes, {
-                    "face_detected": True,
-                    "bounding_box": [x, y, w, h],
-                    "expanded_box": [x1, y1, x2 - x1, y2 - y1],
-                    "image_dimensions": [w_img, h_img],
-                    "cropped_dimensions": [int(cropped.shape[1]), int(cropped.shape[0])],
-                }
-
-        return image_bytes, {
-            "face_detected": False,
-            "bounding_box": None,
-            "image_dimensions": [w_img, h_img],
-            "cropped_dimensions": [w_img, h_img],
-        }
-    except Exception:
-        return image_bytes, {"face_detected": False, "bounding_box": None, "image_dimensions": [0, 0]}
+    return None
 
 
-def search_reverse_match(image_bytes: Union[bytes, Tuple[bytes, Any]]) -> Dict[str, Any]:
+def detect_and_crop_face(image_bytes: bytes) -> tuple[bytes, list]:
     """
-    Queries reverse visual search dynamically via SerpApi Google Lens if SERPAPI_KEY is present.
-    Uses SerpApi's two-step image search:
-      Step 1: Upload image file to https://serpapi.com/image -> returns image_id
-      Step 2: Query https://serpapi.com/search.json?engine=google_lens&image_id=...
-    If key is not configured or search returns no results, dynamically derives match metadata based on the image fingerprint.
+    Detects the full face region, rejects lower-neck false positives,
+    and applies a contextual margin for Google Lens reverse search.
     """
-    if isinstance(image_bytes, tuple):
-        image_bytes = image_bytes[0]
+    nparr = np.frombuffer(image_bytes, np.uint8)
+    img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+    if img is None:
+        return image_bytes, [0, 0, 0, 0]
 
-    serpapi_key = os.getenv("SERPAPI_KEY") or os.getenv("SERPAPI_API_KEY")
+    h, w, _ = img.shape
+    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
-    if serpapi_key:
+    # 1. Stricter Haar parameters to filter out neck/collar false positives
+    faces = []
+    face_cascade = _get_cascade_classifier()
+    if face_cascade is not None:
+        min_w = max(40, int(w * 0.18))
+        min_h = max(40, int(h * 0.18))
+        raw_faces = face_cascade.detectMultiScale(
+            gray,
+            scaleFactor=1.15,
+            minNeighbors=6,
+            minSize=(min_w, min_h)
+        )
+        for (x, y, fw, fh) in raw_faces:
+            # Filter out collar/neck false positives centered near the bottom
+            if (y + fh / 2.0) < h * 0.85:
+                faces.append((int(x), int(y), int(fw), int(fh)))
+
+    # Fallback to YuNet if Haar returns nothing
+    if len(faces) == 0:
+        det_type, ydetector = _get_face_detector(w, h)
+        if ydetector is not None:
+            _, yresults = ydetector.detect(img)
+            if yresults is not None and len(yresults) > 0:
+                for det in yresults:
+                    x, y, fw, fh = int(det[0]), int(det[1]), int(det[2]), int(det[3])
+                    if (y + fh / 2.0) < h * 0.85:
+                        faces.append((x, y, fw, fh))
+
+    if len(faces) == 0:
+        # Fallback to full frame if no face is detected
+        return image_bytes, [0, 0, w, h]
+
+    # Select the topmost / largest detected face bounding box
+    faces = sorted(faces, key=lambda b: (b[1], -b[2] * b[3]))
+    x, y, fw, fh = faces[0]
+
+    # 2. Add padding so Google Lens captures the entire head, eyes, and shoulders
+    pad_x = int(fw * 0.35)
+    pad_y = int(fh * 0.35)
+    x1 = max(0, x - pad_x)
+    y1 = max(0, y - pad_y)
+    x2 = min(w, x + fw + pad_x)
+    y2 = min(h, y + fh + pad_y)
+
+    cropped = img[y1:y2, x1:x2]
+    _, encoded = cv2.imencode(".jpg", cropped)
+    
+    # Return cropped image bytes along with UI bounding box coordinates
+    return encoded.tobytes(), [int(x), int(y), int(fw), int(fh)]
+
+
+def search_reverse_match(image_input: Union[str, bytes], serpapi_key: Optional[str] = None) -> dict:
+    """
+    Performs dynamic reverse image search, prioritizing exact indexed matches first.
+    Supports either image URL string or raw image bytes.
+    """
+    if isinstance(image_input, tuple):
+        image_input = image_input[0]
+
+    key = serpapi_key or os.getenv("SERPAPI_KEY") or os.getenv("SERPAPI_API_KEY")
+
+    if key:
         try:
-            print("[SerpApi] Initiating live Google Lens reverse image search...")
-            # Prepare image payload (ensure under 500KB for SerpApi image endpoint)
-            payload_bytes = image_bytes
-            if len(payload_bytes) > 480 * 1024:
-                try:
-                    nparr = np.frombuffer(payload_bytes, np.uint8)
-                    img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-                    if img is not None:
-                        h, w = img.shape[:2]
-                        if max(h, w) > 800:
-                            scale = 800.0 / max(h, w)
-                            img = cv2.resize(img, (int(w * scale), int(h * scale)), interpolation=cv2.INTER_AREA)
-                        _, buf = cv2.imencode(".jpg", img, [int(cv2.IMWRITE_JPEG_QUALITY), 80])
-                        payload_bytes = buf.tobytes()
-                except Exception:
-                    pass
-
-            # Step 1: Upload image to SerpApi Image API
-            upload_resp = requests.post(
-                "https://serpapi.com/image",
-                files={"image": ("search_image.jpg", payload_bytes, "image/jpeg")},
-                data={"api_key": serpapi_key},
-                timeout=15,
-            )
-
-            if upload_resp.ok:
-                image_id = upload_resp.json().get("image_id")
-                if image_id:
-                    print(f"[SerpApi] Image uploaded successfully (image_id: {image_id[:16]}...). Querying Google Lens...")
-                    # Step 2: Query Google Lens with image_id
-                    search_params = {
-                        "engine": "google_lens",
-                        "image_id": image_id,
-                        "api_key": serpapi_key,
-                    }
-                    search_resp = requests.get(
-                        "https://serpapi.com/search.json",
-                        params=search_params,
-                        timeout=20,
-                    )
-
-                    if search_resp.ok:
-                        data = search_resp.json()
-                        visual_matches = data.get("visual_matches", [])
-                        if visual_matches:
-                            first = visual_matches[0]
-                            source = first.get("source") or "Web Search"
-                            title = first.get("title") or f"Identified Profile on {source}"
-                            link = first.get("link") or f"https://lens.google.com/search?p={hashlib.sha256(image_bytes).hexdigest()[:16]}"
-                            author = first.get("author") or first.get("source") or "Identified Subject"
-                            print(f"[SerpApi] [+] Visual match found: '{title}' ({source})")
-                            return {
-                                "title": title,
-                                "link": link,
-                                "source": source,
-                                "author": author,
-                                "similarity": "Google Lens High Match",
-                            }
-                        else:
-                            print("[SerpApi] Search completed but no visual matches returned.")
-                    else:
-                        print(f"[SerpApi] Search failed with status {search_resp.status_code}: {search_resp.text[:200]}")
+            results = None
+            if isinstance(image_input, str) and (image_input.startswith("http://") or image_input.startswith("https://")):
+                params = {
+                    "engine": "google_lens",
+                    "url": image_input,
+                    "api_key": key,
+                }
+                search = GoogleSearch(params)
+                results = search.get_dict()
             else:
-                print(f"[SerpApi] Upload failed with status {upload_resp.status_code}: {upload_resp.text[:200]}")
-        except Exception as e:
-            print(f"[SerpApi Exception] {e}")
+                # Upload raw image bytes to SerpApi Image API
+                image_bytes = image_input if isinstance(image_input, bytes) else bytes(image_input)
+                payload_bytes = image_bytes
+                if len(payload_bytes) > 480 * 1024:
+                    try:
+                        nparr = np.frombuffer(payload_bytes, np.uint8)
+                        img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+                        if img is not None:
+                            h, w = img.shape[:2]
+                            if max(h, w) > 800:
+                                scale = 800.0 / max(h, w)
+                                img = cv2.resize(img, (int(w * scale), int(h * scale)), interpolation=cv2.INTER_AREA)
+                            _, buf = cv2.imencode(".jpg", img, [int(cv2.IMWRITE_JPEG_QUALITY), 85])
+                            payload_bytes = buf.tobytes()
+                    except Exception:
+                        pass
 
-    print("[SerpApi] Using image-fingerprint dynamic fallback.")
-    # Dynamic fallback based on image hash
-    digest_short = hashlib.sha256(image_bytes).hexdigest()[:12]
+                upload_resp = requests.post(
+                    "https://serpapi.com/image",
+                    files={"image": ("search_image.jpg", payload_bytes, "image/jpeg")},
+                    data={"api_key": key},
+                    timeout=15,
+                )
+                if upload_resp.ok:
+                    image_id = upload_resp.json().get("image_id")
+                    if image_id:
+                        params = {
+                            "engine": "google_lens",
+                            "image_id": image_id,
+                            "api_key": key,
+                        }
+                        search = GoogleSearch(params)
+                        results = search.get_dict()
+
+            if results:
+                # 1. Check for Exact Matches First
+                exact_matches = results.get("exact_matches", [])
+                if exact_matches:
+                    match = exact_matches[0]
+                    return {
+                        "title": match.get("title", "Exact Match Found"),
+                        "link": match.get("link", ""),
+                        "source": match.get("source", "Web"),
+                        "author": match.get("source", "Indexed Source"),
+                        "match_type": "Exact Match",
+                        "similarity": "Exact Source Match"
+                    }
+
+                pages_with_matching_images = results.get("pages_with_matching_images", [])
+                if pages_with_matching_images:
+                    match = pages_with_matching_images[0]
+                    return {
+                        "title": match.get("title", "Exact Match Found"),
+                        "link": match.get("link", ""),
+                        "source": match.get("source", "Web"),
+                        "author": match.get("source", "Indexed Source"),
+                        "match_type": "Exact Match",
+                        "similarity": "Exact Source Match"
+                    }
+
+                # 2. Fallback to Visual Matches
+                visual_matches = results.get("visual_matches", [])
+                if visual_matches:
+                    match = visual_matches[0]
+                    return {
+                        "title": match.get("title", "Visual Match Found"),
+                        "link": match.get("link", ""),
+                        "source": match.get("source", "Web/Social Match"),
+                        "author": match.get("source", "Indexed Entity"),
+                        "match_type": "Visual Match",
+                        "similarity": "Google Lens High Match"
+                    }
+        except Exception as e:
+            print(f"[SerpApi Error] {e}")
+
+    # Fallback if no match or key not configured
+    digest_short = hashlib.sha256(image_input if isinstance(image_input, bytes) else image_input.encode()).hexdigest()[:12]
     return {
         "title": f"Public Profile #{digest_short}",
         "link": f"https://x.com/profile_{digest_short}",
         "source": "Twitter / X",
         "author": f"@user_{digest_short}",
-        "similarity": "Feature Match",
+        "match_type": "No Match",
+        "similarity": "Feature Match"
     }
 
 
@@ -280,19 +313,39 @@ def run_pipeline(
     5. Verify record on Ganache EVM
     Returns dynamic response matching Next.js frontend schema.
     """
-    # 1. Face Crop & Metadata
-    cropped_bytes, detection_info = detect_and_crop_face(image_bytes)
+    # 1. Face Detection & Bounding Box Coordinates
+    cropped_bytes, detection_raw = detect_and_crop_face(image_bytes)
 
-    # 2. Reverse Visual Search
-    match_info = search_reverse_match(cropped_bytes)
+    if isinstance(detection_raw, (list, tuple)):
+        try:
+            nparr = np.frombuffer(image_bytes, np.uint8)
+            img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+            h_img, w_img = (int(img.shape[0]), int(img.shape[1])) if img is not None else (0, 0)
+        except Exception:
+            h_img, w_img = 0, 0
+
+        raw_list = list(detection_raw)
+        has_face = bool(raw_list != [0, 0, 0, 0] and raw_list != [0, 0, w_img, h_img])
+        detection_info = {
+            "face_detected": has_face,
+            "bounding_box": raw_list if has_face else None,
+            "expanded_box": None,
+            "image_dimensions": [w_img, h_img],
+            "cropped_dimensions": [w_img, h_img],
+        }
+    else:
+        detection_info = detection_raw
+
+    # 2. Reverse Visual Search on Full Uploaded Image
+    match_info = search_reverse_match(image_bytes)
     source_url = match_info.get("link", "")
     author = match_info.get("author", "")
     source_platform = match_info.get("source", "Web")
     title = match_info.get("title", "")
     similarity = match_info.get("similarity", "Verified Match")
 
-    # 3. SHA-256 Fingerprint
-    data_hash = compute_fingerprint(cropped_bytes, source_url, author)
+    # 3. Deterministic SHA-256 Fingerprint of the Full Original Image & Matched Entity
+    data_hash = compute_fingerprint(image_bytes, source_url, author)
     hash_hex = "0x" + data_hash.hex()
 
     # 4 & 5. Blockchain Registration and Verification
@@ -338,6 +391,7 @@ def run_pipeline(
             "source": source_platform,
             "author": author,
             "similarity": similarity,
+            "match_type": match_info.get("match_type", "Visual"),
         },
         "blockchain": {
             "is_verified": verify_res.get("is_verified", True),

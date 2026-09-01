@@ -188,12 +188,14 @@ def run_cli_mode(image_path: str, rpc_url: str = GANACHE_URL):
         print(f"      [*] No frontal face isolated; using full frame buffer ({len(cropped_bytes) / 1024:.2f} KB)")
 
     # Step 2: Reverse Visual Search
-    print("\n[2/3] Querying Reverse Visual Search Index...")
-    match_info = search_reverse_match(cropped_bytes)
+    print("\n[2/3] Querying Reverse Visual Search Index (Full Image)...")
+    match_info = search_reverse_match(image_bytes)
+    print(f"      [+] Match Type        : {match_info.get('match_type', 'Visual')}")
     print(f"      [+] Discovered Source : {match_info.get('source', 'Web')}")
     print(f"      [+] Profile / Title   : {match_info.get('title', 'N/A')}")
     print(f"      [+] Target Link       : {match_info.get('link', 'N/A')}")
     print(f"      [+] Author / Handle   : {match_info.get('author', 'N/A')}")
+    print(f"      [+] Match Confidence  : {match_info.get('similarity', 'Feature Match')}")
 
     # Step 3: SHA-256 Digest & Blockchain Attestation
     print("\n[3/3] Mining Ganache EVM Attestation Block...")

@@ -14,6 +14,10 @@ import {
   ShieldCheck,
   Globe,
   Scan,
+  Crop,
+  Sliders,
+  Maximize2,
+  RotateCcw,
   Link as LinkIcon,
 } from "lucide-react";
 
@@ -31,6 +35,7 @@ export interface MatchResult {
   source: string;
   author?: string;
   similarity?: string;
+  match_type?: string;
 }
 
 export interface BlockchainResult {
@@ -49,6 +54,13 @@ export interface VerificationResponse {
   blockchain: BlockchainResult;
 }
 
+interface CropBox {
+  x: number; // percentage 0-100
+  y: number; // percentage 0-100
+  w: number; // percentage 0-100
+  h: number; // percentage 0-100
+}
+
 const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
 
 export default function FaceNetDashboard() {
@@ -62,7 +74,14 @@ export default function FaceNetDashboard() {
   const [backendConnected, setBackendConnected] = useState<boolean | null>(null);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
 
+  // Interactive Crop State
+  const [isCropMode, setIsCropMode] = useState<boolean>(false);
+  const [cropBox, setCropBox] = useState<CropBox>({ x: 15, y: 15, w: 70, h: 70 });
+  const [activeDragHandle, setActiveDragHandle] = useState<string | null>(null);
+  const [dragStart, setDragStart] = useState<{ clientX: number; clientY: number; box: CropBox } | null>(null);
+
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const viewportRef = useRef<HTMLDivElement>(null);
 
   const checkBackendHealth = useCallback(async () => {
     try {
@@ -107,6 +126,8 @@ export default function FaceNetDashboard() {
     setFile(selectedFile);
     setErrorMessage(null);
     setResult(null);
+    setIsCropMode(false);
+    setCropBox({ x: 15, y: 15, w: 70, h: 70 });
 
     const url = URL.createObjectURL(selectedFile);
     setPreviewUrl(url);
@@ -126,8 +147,149 @@ export default function FaceNetDashboard() {
     setImageDimensions(null);
     setResult(null);
     setErrorMessage(null);
+    setIsCropMode(false);
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
+
+  // Crop Drag & Resize Handlers
+  const handlePointerDown = (e: React.PointerEvent, handle: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setActiveDragHandle(handle);
+    setDragStart({
+      clientX: e.clientX,
+      clientY: e.clientY,
+      box: { ...cropBox },
+    });
+  };
+
+  const handlePointerMove = useCallback(
+    (e: PointerEvent) => {
+      if (!activeDragHandle || !dragStart || !viewportRef.current) return;
+
+      const rect = viewportRef.current.getBoundingClientRect();
+      if (rect.width === 0 || rect.height === 0) return;
+
+      const deltaXPercent = ((e.clientX - dragStart.clientX) / rect.width) * 100;
+      const deltaYPercent = ((e.clientY - dragStart.clientY) / rect.height) * 100;
+
+      const { box } = dragStart;
+
+      if (activeDragHandle === "move") {
+        const nextX = Math.max(0, Math.min(100 - box.w, box.x + deltaXPercent));
+        const nextY = Math.max(0, Math.min(100 - box.h, box.y + deltaYPercent));
+        setCropBox((prev) => ({ ...prev, x: nextX, y: nextY }));
+      } else if (activeDragHandle === "se") {
+        const nextW = Math.max(8, Math.min(100 - box.x, box.w + deltaXPercent));
+        const nextH = Math.max(8, Math.min(100 - box.y, box.h + deltaYPercent));
+        setCropBox((prev) => ({ ...prev, w: nextW, h: nextH }));
+      } else if (activeDragHandle === "nw") {
+        const nextX = Math.max(0, Math.min(box.x + box.w - 8, box.x + deltaXPercent));
+        const nextY = Math.max(0, Math.min(box.y + box.h - 8, box.y + deltaYPercent));
+        const nextW = box.w - (nextX - box.x);
+        const nextH = box.h - (nextY - box.y);
+        setCropBox({ x: nextX, y: nextY, w: nextW, h: nextH });
+      } else if (activeDragHandle === "ne") {
+        const nextY = Math.max(0, Math.min(box.y + box.h - 8, box.y + deltaYPercent));
+        const nextW = Math.max(8, Math.min(100 - box.x, box.w + deltaXPercent));
+        const nextH = box.h - (nextY - box.y);
+        setCropBox({ x: box.x, y: nextY, w: nextW, h: nextH });
+      } else if (activeDragHandle === "sw") {
+        const nextX = Math.max(0, Math.min(box.x + box.w - 8, box.x + deltaXPercent));
+        const nextW = box.w - (nextX - box.x);
+        const nextH = Math.max(8, Math.min(100 - box.y, box.h + deltaYPercent));
+        setCropBox({ x: nextX, y: box.y, w: nextW, h: nextH });
+      }
+    },
+    [activeDragHandle, dragStart]
+  );
+
+  const handlePointerUp = useCallback(() => {
+    setActiveDragHandle(null);
+    setDragStart(null);
+  }, []);
+
+  useEffect(() => {
+    if (activeDragHandle) {
+      window.addEventListener("pointermove", handlePointerMove);
+      window.addEventListener("pointerup", handlePointerUp);
+      return () => {
+        window.removeEventListener("pointermove", handlePointerMove);
+        window.removeEventListener("pointerup", handlePointerUp);
+      };
+    }
+  }, [activeDragHandle, handlePointerMove, handlePointerUp]);
+
+  // Generate cropped image blob for custom search
+  const getSubmittableFile = async (): Promise<File> => {
+    if (!file || !isCropMode || !previewUrl || !imageDimensions) {
+      return file!;
+    }
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.crossOrigin = "anonymous";
+      img.onload = () => {
+        const srcX = Math.round((cropBox.x / 100) * img.naturalWidth);
+        const srcY = Math.round((cropBox.y / 100) * img.naturalHeight);
+        const srcW = Math.max(10, Math.round((cropBox.w / 100) * img.naturalWidth));
+        const srcH = Math.max(10, Math.round((cropBox.h / 100) * img.naturalHeight));
+
+        const canvas = document.createElement("canvas");
+        canvas.width = srcW;
+        canvas.height = srcH;
+        const ctx = canvas.getContext("2d");
+        if (ctx) {
+          ctx.drawImage(img, srcX, srcY, srcW, srcH, 0, 0, srcW, srcH);
+        }
+        canvas.toBlob(
+          (blob) => {
+            if (blob) {
+              const croppedFile = new File([blob], `crop_${file.name}`, {
+                type: "image/jpeg",
+              });
+              resolve(croppedFile);
+            } else {
+              resolve(file);
+            }
+          },
+          "image/jpeg",
+          0.95
+        );
+      };
+      img.onerror = () => resolve(file);
+      img.src = previewUrl;
+    });
+  };
+
+  const fitCropToDetectedFace = () => {
+    if (!result?.detection?.bounding_box || !imageDimensions) return;
+    const [fx, fy, fw, fh] = result.detection.bounding_box;
+    const padX = fw * 0.35;
+    const padY = fh * 0.35;
+    const x1 = Math.max(0, fx - padX);
+    const y1 = Math.max(0, fy - padY);
+    const x2 = Math.min(imageDimensions.width, fx + fw + padX);
+    const y2 = Math.min(imageDimensions.height, fy + fh + padY);
+
+    setCropBox({
+      x: (x1 / imageDimensions.width) * 100,
+      y: (y1 / imageDimensions.height) * 100,
+      w: ((x2 - x1) / imageDimensions.width) * 100,
+      h: ((y2 - y1) / imageDimensions.height) * 100,
+    });
+    setIsCropMode(true);
+  };
+
+  const getCropPixelStats = () => {
+    if (!imageDimensions) return null;
+    const pxW = Math.round((cropBox.w / 100) * imageDimensions.width);
+    const pxH = Math.round((cropBox.h / 100) * imageDimensions.height);
+    const pxX = Math.round((cropBox.x / 100) * imageDimensions.width);
+    const pxY = Math.round((cropBox.y / 100) * imageDimensions.height);
+    return { pxW, pxH, pxX, pxY };
+  };
+
+  const cropPixelStats = getCropPixelStats();
 
   const runVerification = async () => {
     if (!file) return;
@@ -137,8 +299,9 @@ export default function FaceNetDashboard() {
     setResult(null);
 
     try {
+      const fileToSend = await getSubmittableFile();
       const formData = new FormData();
-      formData.append("file", file);
+      formData.append("file", fileToSend);
 
       const response = await fetch(`${BACKEND_URL}/api/verify`, {
         method: "POST",
@@ -383,7 +546,7 @@ export default function FaceNetDashboard() {
             type="button"
             disabled={!file || isLoading}
             onClick={runVerification}
-            className={`lg:w-72 py-4 px-6 rounded-lg font-bold text-xs tracking-wider uppercase transition-all flex items-center justify-center gap-2 shrink-0 ${
+            className={`lg:w-80 py-4 px-6 rounded-lg font-bold text-xs tracking-wider uppercase transition-all flex items-center justify-center gap-2 shrink-0 ${
               isLoading
                 ? "bg-neutral-800 text-emerald-400 border border-neutral-700 cursor-wait shadow-inner"
                 : !file
@@ -396,8 +559,13 @@ export default function FaceNetDashboard() {
                 <RefreshCw className="w-4 h-4 animate-spin text-emerald-400" />
                 <span>Processing Pipeline...</span>
               </>
+            ) : isCropMode && cropPixelStats ? (
+              <span className="flex items-center gap-1.5">
+                <Crop className="w-4 h-4" />
+                <span>Search Crop ({cropPixelStats.pxW}×{cropPixelStats.pxH}px)</span>
+              </span>
             ) : (
-              <span>Run Verification Pipeline</span>
+              <span>Run Verification (Full Image)</span>
             )}
           </button>
         </div>
@@ -405,7 +573,7 @@ export default function FaceNetDashboard() {
 
       {/* 3. Expansive 3-Stage Result Panels */}
       <section className="grid grid-cols-1 lg:grid-cols-3 gap-6 flex-1">
-        {/* CARD 01: Face Detection */}
+        {/* CARD 01: Face Detection & Custom ROI Crop */}
         <div className="bg-neutral-900/30 rounded-xl border border-neutral-800/80 p-5 flex flex-col justify-between min-h-[500px] lg:min-h-[540px] shadow-sm">
           <div className="space-y-4">
             <div className="flex items-center justify-between pb-3 border-b border-neutral-800">
@@ -414,51 +582,200 @@ export default function FaceNetDashboard() {
                   01
                 </span>
                 <h2 className="text-xs font-bold uppercase tracking-wider text-neutral-200">
-                  Face Detection
+                  {isCropMode ? "Custom ROI Crop" : "Face Detection"}
                 </h2>
               </div>
-              {result && (
-                <span className="text-[11px] text-emerald-400 font-semibold flex items-center gap-1 bg-emerald-950/40 border border-emerald-800/60 px-2 py-0.5 rounded">
-                  <CheckCircle2 className="w-3.5 h-3.5" />
-                  {result.detection?.face_detected ? "Face Detected" : "Frame Ingested"}
-                </span>
-              )}
+
+              <div className="flex items-center gap-2">
+                {file && (
+                  <button
+                    type="button"
+                    onClick={() => setIsCropMode(!isCropMode)}
+                    className={`px-2.5 py-1 rounded text-[11px] font-semibold flex items-center gap-1.5 border transition-all ${
+                      isCropMode
+                        ? "bg-emerald-950/60 border-emerald-500 text-emerald-300 shadow-[0_0_10px_rgba(16,185,129,0.2)]"
+                        : "bg-neutral-900 border-neutral-800 text-neutral-400 hover:text-neutral-200 hover:border-neutral-700"
+                    }`}
+                    title="Toggle manual crop tool"
+                  >
+                    <Crop className="w-3.5 h-3.5" />
+                    <span>{isCropMode ? "Crop Active" : "Crop Tool"}</span>
+                  </button>
+                )}
+                {result && !isCropMode && (
+                  <span className="text-[11px] text-emerald-400 font-semibold flex items-center gap-1 bg-emerald-950/40 border border-emerald-800/60 px-2 py-0.5 rounded">
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    {result.detection?.face_detected ? "Face Detected" : "Frame Ingested"}
+                  </span>
+                )}
+              </div>
             </div>
+
+            {/* Quick Crop Presets Bar when Crop Mode is ON */}
+            {previewUrl && isCropMode && (
+              <div className="flex flex-wrap items-center justify-between gap-2 p-2 rounded-lg bg-neutral-950 border border-neutral-800 text-[11px]">
+                <div className="flex items-center gap-1 text-neutral-400">
+                  <Sliders className="w-3 h-3 text-emerald-400" />
+                  <span className="text-[10px] uppercase font-bold text-neutral-500">Presets:</span>
+                  <button
+                    type="button"
+                    onClick={() => setCropBox({ x: 0, y: 0, w: 100, h: 100 })}
+                    className="px-2 py-0.5 bg-neutral-900 hover:bg-neutral-800 text-neutral-300 rounded border border-neutral-800 hover:border-neutral-700"
+                  >
+                    Full (100%)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCropBox({ x: 20, y: 20, w: 60, h: 60 })}
+                    className="px-2 py-0.5 bg-neutral-900 hover:bg-neutral-800 text-neutral-300 rounded border border-neutral-800 hover:border-neutral-700"
+                  >
+                    Center (60%)
+                  </button>
+                  {result?.detection?.bounding_box && (
+                    <button
+                      type="button"
+                      onClick={fitCropToDetectedFace}
+                      className="px-2 py-0.5 bg-emerald-950/60 hover:bg-emerald-900/60 text-emerald-300 rounded border border-emerald-800 hover:border-emerald-700"
+                    >
+                      Face ROI
+                    </button>
+                  )}
+                </div>
+                {cropPixelStats && (
+                  <span className="text-emerald-400 font-semibold text-[10px]">
+                    {cropPixelStats.pxW} × {cropPixelStats.pxH} px
+                  </span>
+                )}
+              </div>
+            )}
 
             {previewUrl ? (
               <div className="space-y-4">
                 {/* Large Preview Frame with Dynamic Bounding Box Overlay */}
-                <div className="relative aspect-[4/3] w-full rounded-lg bg-neutral-950 border border-neutral-800 overflow-hidden group">
+                <div
+                  ref={viewportRef}
+                  className="relative aspect-[4/3] w-full rounded-lg bg-neutral-950 border border-neutral-800 overflow-hidden group select-none touch-none"
+                >
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     src={previewUrl}
                     alt="Face Detection Viewport"
-                    className="w-full h-full object-cover filter contrast-105"
+                    className="w-full h-full object-cover filter contrast-105 pointer-events-none"
                   />
 
-                  {/* Real Dynamic Bounding Box Overlay */}
-                  {boundingBoxStyle && (
-                    <div
-                      className="absolute border border-emerald-400 rounded-sm pointer-events-none shadow-[0_0_15px_rgba(16,185,129,0.3)] transition-all"
-                      style={boundingBoxStyle}
-                    >
-                      <div className="absolute -top-1 -left-1 w-2.5 h-2.5 border-t-2 border-l-2 border-emerald-400" />
-                      <div className="absolute -top-1 -right-1 w-2.5 h-2.5 border-t-2 border-r-2 border-emerald-400" />
-                      <div className="absolute -bottom-1 -left-1 w-2.5 h-2.5 border-b-2 border-l-2 border-emerald-400" />
-                      <div className="absolute -bottom-1 -right-1 w-2.5 h-2.5 border-b-2 border-r-2 border-emerald-400" />
-                    </div>
+                  {/* CROP MODE INTERACTIVE OVERLAY */}
+                  {isCropMode ? (
+                    <>
+                      {/* Darkened Backdrop Panels Outside Crop Area */}
+                      <div
+                        className="absolute top-0 left-0 right-0 bg-neutral-950/75 pointer-events-none transition-all"
+                        style={{ height: `${cropBox.y}%` }}
+                      />
+                      <div
+                        className="absolute bottom-0 left-0 right-0 bg-neutral-950/75 pointer-events-none transition-all"
+                        style={{ height: `${Math.max(0, 100 - (cropBox.y + cropBox.h))}%` }}
+                      />
+                      <div
+                        className="absolute bg-neutral-950/75 pointer-events-none transition-all"
+                        style={{
+                          top: `${cropBox.y}%`,
+                          height: `${cropBox.h}%`,
+                          left: 0,
+                          width: `${cropBox.x}%`,
+                        }}
+                      />
+                      <div
+                        className="absolute bg-neutral-950/75 pointer-events-none transition-all"
+                        style={{
+                          top: `${cropBox.y}%`,
+                          height: `${cropBox.h}%`,
+                          right: 0,
+                          width: `${Math.max(0, 100 - (cropBox.x + cropBox.w))}%`,
+                        }}
+                      />
+
+                      {/* Draggable & Resizable Crop Box */}
+                      <div
+                        onPointerDown={(e) => handlePointerDown(e, "move")}
+                        className="absolute border-2 border-dashed border-emerald-400 bg-emerald-500/15 cursor-move shadow-[0_0_20px_rgba(16,185,129,0.3)]"
+                        style={{
+                          left: `${cropBox.x}%`,
+                          top: `${cropBox.y}%`,
+                          width: `${cropBox.w}%`,
+                          height: `${cropBox.h}%`,
+                        }}
+                      >
+                        {/* Grid lines (Rule of thirds) */}
+                        <div className="absolute inset-0 pointer-events-none grid grid-cols-3 grid-rows-3 opacity-25">
+                          <div className="border-r border-b border-emerald-300" />
+                          <div className="border-r border-b border-emerald-300" />
+                          <div className="border-b border-emerald-300" />
+                          <div className="border-r border-b border-emerald-300" />
+                          <div className="border-r border-b border-emerald-300" />
+                          <div className="border-b border-emerald-300" />
+                          <div className="border-r border-emerald-300" />
+                          <div className="border-r border-emerald-300" />
+                          <div />
+                        </div>
+
+                        {/* Corner Resize Handles */}
+                        <div
+                          onPointerDown={(e) => handlePointerDown(e, "nw")}
+                          className="absolute -top-2 -left-2 w-4 h-4 bg-emerald-400 border border-neutral-950 rounded-sm cursor-nwse-resize hover:scale-125 transition-transform"
+                          title="Drag to resize"
+                        />
+                        <div
+                          onPointerDown={(e) => handlePointerDown(e, "ne")}
+                          className="absolute -top-2 -right-2 w-4 h-4 bg-emerald-400 border border-neutral-950 rounded-sm cursor-nesw-resize hover:scale-125 transition-transform"
+                          title="Drag to resize"
+                        />
+                        <div
+                          onPointerDown={(e) => handlePointerDown(e, "sw")}
+                          className="absolute -bottom-2 -left-2 w-4 h-4 bg-emerald-400 border border-neutral-950 rounded-sm cursor-nesw-resize hover:scale-125 transition-transform"
+                          title="Drag to resize"
+                        />
+                        <div
+                          onPointerDown={(e) => handlePointerDown(e, "se")}
+                          className="absolute -bottom-2 -right-2 w-4 h-4 bg-emerald-400 border border-neutral-950 rounded-sm cursor-nwse-resize hover:scale-125 transition-transform"
+                          title="Drag to resize"
+                        />
+
+                        {/* Floating live tag */}
+                        <div className="absolute top-2 left-2 bg-neutral-950/90 text-emerald-300 text-[10px] font-bold px-2 py-0.5 rounded border border-emerald-800/80 shadow pointer-events-none">
+                          ✂ Search ROI ({cropPixelStats ? `${cropPixelStats.pxW}×${cropPixelStats.pxH}` : "Custom"})
+                        </div>
+                      </div>
+                    </>
+                  ) : (
+                    /* NORMAL VIEW WITH FACE DETECTION BOUNDING BOX */
+                    boundingBoxStyle && (
+                      <div
+                        className="absolute border border-emerald-400 rounded-sm pointer-events-none shadow-[0_0_15px_rgba(16,185,129,0.3)] transition-all"
+                        style={boundingBoxStyle}
+                      >
+                        <div className="absolute -top-1 -left-1 w-2.5 h-2.5 border-t-2 border-l-2 border-emerald-400" />
+                        <div className="absolute -top-1 -right-1 w-2.5 h-2.5 border-t-2 border-r-2 border-emerald-400" />
+                        <div className="absolute -bottom-1 -left-1 w-2.5 h-2.5 border-b-2 border-l-2 border-emerald-400" />
+                        <div className="absolute -bottom-1 -right-1 w-2.5 h-2.5 border-b-2 border-r-2 border-emerald-400" />
+                      </div>
+                    )
                   )}
 
+                  {/* Bottom Viewport Info Bar */}
                   <div className="absolute bottom-2.5 left-2.5 right-2.5 bg-neutral-950/85 backdrop-blur-sm border border-neutral-800 px-2.5 py-1 rounded text-[11px] text-neutral-300 flex items-center justify-between">
                     <span className="text-emerald-400 font-semibold">
-                      {result?.detection?.cropped_dimensions
-                        ? `${result.detection.cropped_dimensions[0]} × ${result.detection.cropped_dimensions[1]} px`
+                      {isCropMode && cropPixelStats
+                        ? `${cropPixelStats.pxW} × ${cropPixelStats.pxH} px (Custom ROI)`
                         : imageDimensions
-                        ? `${imageDimensions.width} × ${imageDimensions.height} px`
-                        : "Processed Frame"}
+                        ? `${imageDimensions.width} × ${imageDimensions.height} px (Full Image)`
+                        : "Target Frame"}
                     </span>
                     <span className="text-neutral-400">
-                      {result?.detection?.face_detected ? "ROI Cropped" : "Frame Ingested"}
+                      {isCropMode
+                        ? "Custom Crop Active"
+                        : result?.detection?.face_detected
+                        ? "Face Localized (Full Search)"
+                        : "Full Frame Search"}
                     </span>
                   </div>
                 </div>
@@ -467,15 +784,21 @@ export default function FaceNetDashboard() {
                 {file && (
                   <div className="space-y-2 text-xs pt-1">
                     <div className="p-3 rounded bg-neutral-950 border border-neutral-800/80 flex justify-between items-center">
-                      <span className="text-neutral-500">File Size</span>
-                      <span className="text-neutral-200 font-medium">{formatFileSize(file.size)}</span>
+                      <span className="text-neutral-500">Search Target</span>
+                      <span className="text-emerald-400 font-medium">
+                        {isCropMode && cropPixelStats
+                          ? `Custom Crop [x:${cropPixelStats.pxX}, y:${cropPixelStats.pxY}, w:${cropPixelStats.pxW}, h:${cropPixelStats.pxH}]`
+                          : "Full Uploaded Image"}
+                      </span>
                     </div>
                     <div className="p-3 rounded bg-neutral-950 border border-neutral-800/80 flex justify-between items-center">
-                      <span className="text-neutral-500">MIME Format</span>
-                      <span className="text-neutral-200 font-medium">{file.type || "image/jpeg"}</span>
+                      <span className="text-neutral-500">File Size & Format</span>
+                      <span className="text-neutral-200 font-medium">
+                        {formatFileSize(file.size)} ({file.type || "image/jpeg"})
+                      </span>
                     </div>
                     <div className="p-3 rounded bg-neutral-950 border border-neutral-800/80 flex justify-between items-center">
-                      <span className="text-neutral-500">Bounding Coordinates</span>
+                      <span className="text-neutral-500">Face Coordinates</span>
                       <span className="text-emerald-400 font-medium">
                         {result?.detection?.bounding_box
                           ? `[${result.detection.bounding_box.join(", ")}]`
@@ -507,10 +830,23 @@ export default function FaceNetDashboard() {
                 </h2>
               </div>
               {result?.match && (
-                <span className="text-[11px] text-sky-400 font-semibold bg-sky-950/40 border border-sky-800/60 px-2 py-0.5 rounded flex items-center gap-1">
-                  <Globe className="w-3.5 h-3.5" />
-                  {result.match.source}
-                </span>
+                <div className="flex items-center gap-1.5">
+                  {result.match.match_type && (
+                    <span
+                      className={`text-[10px] font-bold px-2 py-0.5 rounded border uppercase tracking-wider ${
+                        result.match.match_type === "Exact"
+                          ? "bg-emerald-950/40 border-emerald-700/60 text-emerald-300"
+                          : "bg-sky-950/40 border-sky-800/60 text-sky-300"
+                      }`}
+                    >
+                      {result.match.match_type}
+                    </span>
+                  )}
+                  <span className="text-[11px] text-sky-400 font-semibold bg-sky-950/40 border border-sky-800/60 px-2 py-0.5 rounded flex items-center gap-1">
+                    <Globe className="w-3.5 h-3.5" />
+                    {result.match.source}
+                  </span>
+                </div>
               )}
             </div>
 
