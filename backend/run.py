@@ -6,6 +6,9 @@ from pathlib import Path
 from typing import Optional
 from contextlib import asynccontextmanager
 
+# Suppress verbose OpenCV DNN graph engine warnings
+os.environ["OPENCV_LOG_LEVEL"] = "ERROR"
+
 try:
     from dotenv import load_dotenv
     load_dotenv(Path(__file__).resolve().parent / ".env")
@@ -13,11 +16,18 @@ try:
 except ImportError:
     pass
 
+import cv2
+import numpy as np
+
+try:
+    if hasattr(cv2, "utils") and hasattr(cv2.utils, "logging"):
+        cv2.utils.logging.setLogLevel(cv2.utils.logging.LOG_LEVEL_ERROR)
+except Exception:
+    pass
+
 from fastapi import FastAPI, File, UploadFile, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
-import cv2
-import numpy as np
 
 from blockchain_service import GANACHE_URL
 from pipeline_core import (
@@ -39,21 +49,17 @@ async def lifespan(app: FastAPI):
     Lifecycle event handler to auto-connect / deploy Ganache contract on server start.
     """
     global CONTRACT_ADDR, CONTRACT_ABI
-    print("=" * 60)
-    print("FaceNet // Task 3 Pipeline API Server")
-    print(f"Ganache RPC URL: {GANACHE_URL}")
-    print("=" * 60)
+    print("[init] facenet pipeline api server")
+    print(f"  rpc endpoint:   {GANACHE_URL}")
 
     try:
-        print("[Startup] Initializing Ganache EVM connection and smart contract...")
         CONTRACT_ADDR, CONTRACT_ABI = get_or_deploy_contract(rpc_url=GANACHE_URL)
-        print(f"[Startup] ✓ FaceRegistry contract ready at: {CONTRACT_ADDR}")
+        print(f"  contract:       {CONTRACT_ADDR} (FaceRegistry ready)")
     except Exception as e:
-        print(f"[Startup] ⚠ Warning: Could not initialize Ganache contract at startup: {e}")
-        print("[Startup] Will attempt on-demand deployment when verification requests arrive.")
+        print(f"  contract:       warning: could not connect to ganache ({e})")
 
     yield
-    print("[Shutdown] Server shutting down.")
+    print("[shutdown] server stopped.")
 
 
 # Initialize FastAPI App
@@ -152,37 +158,32 @@ if hasattr(sys.stdout, "reconfigure"):
 
 def run_cli_mode(image_path: str, rpc_url: str = GANACHE_URL):
     """
-    Executes the pipeline in standalone CLI mode and prints formatted progress.
+    Executes the pipeline in standalone CLI mode with clean developer terminal output.
     """
     path = Path(image_path)
     if not path.exists():
-        print(f"\n[-] ERROR: Image file not found: {image_path}")
+        print(f"error: image file not found: {image_path}", file=sys.stderr)
         sys.exit(1)
 
-    print("\n" + "=" * 65)
-    print("  FaceNet // Standalone CLI Pipeline Execution")
-    print("=" * 65)
-    print(f"Target Image File : {path.resolve()}")
-    print(f"File Size         : {path.stat().st_size / 1024:.2f} KB")
-    print(f"Ganache RPC URL   : {rpc_url}")
-    print("-" * 65)
+    file_size_kb = path.stat().st_size / 1024
 
     with open(path, "rb") as f:
         image_bytes = f.read()
 
-    # Step 0: Deploy/Connect Contract
-    print("\n[0/3] Connecting to Ganache EVM & Smart Contract...")
+    # Initialization & Contract
+    print(f"\n[init] payload: {path.name} ({file_size_kb:.2f} KB)")
+    print(f"  rpc:            {rpc_url}")
     try:
         contract_addr, abi = get_or_deploy_contract(rpc_url=rpc_url)
-        print(f"      [+] FaceRegistry Contract: {contract_addr}")
+        print(f"  contract:       {contract_addr}")
     except Exception as e:
-        print(f"      [-] Failed to connect to Ganache: {e}")
+        print(f"  contract:       error: failed to connect ({e})", file=sys.stderr)
         sys.exit(1)
 
-    # Step 1: Face Crop
-    print("\n[1/3] Detecting Face & Normalizing...")
+    # Step 1: Computer Vision & Face ROI
+    print("\n[vision] face roi localization")
     cropped_bytes, detection_info = detect_and_crop_face(image_bytes)
-    
+
     if isinstance(detection_info, (list, tuple)):
         raw_box = list(detection_info)
         try:
@@ -191,33 +192,42 @@ def run_cli_mode(image_path: str, rpc_url: str = GANACHE_URL):
             h_img, w_img = (int(img.shape[0]), int(img.shape[1])) if img is not None else (0, 0)
         except Exception:
             h_img, w_img = 0, 0
-        
+
         has_face = bool(raw_box != [0, 0, 0, 0] and raw_box != [0, 0, w_img, h_img])
         if has_face:
-            print(f"      [+] Face localized at ROI [x:{raw_box[0]}, y:{raw_box[1]}, w:{raw_box[2]}, h:{raw_box[3]}]")
-            print(f"      [+] Cropped with 35% margin ({len(cropped_bytes) / 1024:.2f} KB)")
+            print("  status:         face localized")
+            print(f"  bounding box:   [x:{raw_box[0]}, y:{raw_box[1]}, w:{raw_box[2]}, h:{raw_box[3]}]")
+            print(f"  crop context:   {len(cropped_bytes) / 1024:.2f} KB (35% margin)")
         else:
-            print(f"      [*] No frontal face isolated; using full frame buffer ({len(cropped_bytes) / 1024:.2f} KB)")
+            print("  status:         no frontal face detected")
+            print(f"  buffer:         full frame ({len(cropped_bytes) / 1024:.2f} KB)")
     elif isinstance(detection_info, dict):
         if detection_info.get("face_detected"):
             bbox = detection_info.get("bounding_box", [])
-            print(f"      [+] Face localized at ROI [x:{bbox[0]}, y:{bbox[1]}, w:{bbox[2]}, h:{bbox[3]}]")
-            print(f"      [+] Cropped with 35% margin ({len(cropped_bytes) / 1024:.2f} KB)")
+            print("  status:         face localized")
+            print(f"  bounding box:   [x:{bbox[0]}, y:{bbox[1]}, w:{bbox[2]}, h:{bbox[3]}]")
+            print(f"  crop context:   {len(cropped_bytes) / 1024:.2f} KB (35% margin)")
         else:
-            print(f"      [*] No frontal face isolated; using full frame buffer ({len(cropped_bytes) / 1024:.2f} KB)")
+            print("  status:         no frontal face detected")
+            print(f"  buffer:         full frame ({len(cropped_bytes) / 1024:.2f} KB)")
 
-    # Step 2: Reverse Visual Search
-    print("\n[2/3] Querying Reverse Visual Search Index (Full Image)...")
+    # Step 2: Reverse Visual Graph Lookup
+    print("\n[osint] reverse visual graph resolver")
     match_info = search_reverse_match(image_bytes)
-    print(f"      [+] Match Type        : {match_info.get('match_type', 'Visual')}")
-    print(f"      [+] Discovered Source : {match_info.get('source', 'Web')}")
-    print(f"      [+] Profile / Title   : {match_info.get('title', 'N/A')}")
-    print(f"      [+] Target Link       : {match_info.get('link', 'N/A')}")
-    print(f"      [+] Author / Handle   : {match_info.get('author', 'N/A')}")
-    print(f"      [+] Match Confidence  : {match_info.get('similarity', 'Feature Match')}")
+    source = match_info.get("source", "Web")
+    match_type = match_info.get("match_type", "Visual")
+    title = match_info.get("title", "No title metadata")
+    link = match_info.get("link", "")
+    author = match_info.get("author", "")
+
+    print(f"  source:         {source} ({match_type})")
+    print(f"  title:          {title}")
+    if author:
+        print(f"  author:         {author}")
+    print(f"  target url:     {link if link else 'none'}")
 
     # Step 3: SHA-256 Digest & Blockchain Attestation
-    print("\n[3/3] Mining Ganache EVM Attestation Block...")
+    print("\n[evm] blockchain ledger attestation")
     t0 = time.time()
     try:
         pipeline_result = run_pipeline(
@@ -228,20 +238,21 @@ def run_cli_mode(image_path: str, rpc_url: str = GANACHE_URL):
         )
         elapsed = time.time() - t0
         blockchain = pipeline_result.get("blockchain", {})
+        tx_hash = blockchain.get("tx_hash", "")
+        block_num = blockchain.get("block_number", 0)
+        gas_used = blockchain.get("gas_used", 0)
+        hash_hex = blockchain.get("hash_hex", "")
+        status_str = "VERIFIED" if blockchain.get("is_verified") else "UNVERIFIED"
 
-        print(f"      [+] Transaction Mined in {elapsed:.3f}s")
-        print("\n" + "=" * 65)
-        print("  VERIFICATION RESULT: ON-CHAIN ATTESTED [OK]")
-        print("=" * 65)
-        print(f"  Status        : {'VERIFIED' if blockchain.get('is_verified') else 'UNVERIFIED'}")
-        print(f"  Block Number  : #{blockchain.get('block_number')}")
-        print(f"  Tx Hash       : {blockchain.get('tx_hash')}")
-        print(f"  SHA-256 Digest: {blockchain.get('hash_hex')}")
-        print(f"  Gas Used      : {blockchain.get('gas_used'):,} units")
-        print(f"  Timestamp     : {blockchain.get('on_chain_timestamp')}")
-        print("=" * 65 + "\n")
+        print(f"  state root:     {hash_hex}")
+        print(f"  tx hash:        {tx_hash}")
+        print(f"  block:          #{block_num}")
+        print(f"  gas used:       {gas_used:,} units")
+        print(f"  latency:        {elapsed:.3f}s")
+
+        print(f"\n✓ status: {status_str} (block #{block_num}, {gas_used:,} gas, {elapsed:.3f}s)\n")
     except Exception as e:
-        print(f"      [-] Pipeline attestation failed: {e}")
+        print(f"\nerror: attestation failed: {e}\n", file=sys.stderr)
         sys.exit(1)
 
 
@@ -278,27 +289,16 @@ def main():
         default=8000,
         help="Server port to bind (default: 8000)",
     )
-    parser.add_argument(
-        "--reload",
-        action="store_true",
-        help="Enable auto-reload for Uvicorn server",
-    )
 
     args = parser.parse_args()
 
     if args.cli:
         if not args.image:
-            print("[ERROR] Argument --image / -i <path> is required when running in --cli mode.")
+            print("error: missing required argument: --image / -i <path_to_image>", file=sys.stderr)
             sys.exit(1)
         run_cli_mode(image_path=args.image, rpc_url=args.rpc)
     else:
-        print(f"Starting FastAPI Web Server on http://{args.host}:{args.port}...")
-        uvicorn.run(
-            "run:app",
-            host=args.host,
-            port=args.port,
-            reload=args.reload,
-        )
+        uvicorn.run(app, host=args.host, port=args.port)
 
 
 if __name__ == "__main__":
