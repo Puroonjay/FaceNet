@@ -131,6 +131,7 @@ def register_record(
     abi: list,
     data_hash_bytes: Union[str, bytes, HexBytes],
     source_url: str,
+    platform: str,
     author: str,
     rpc_url: str = GANACHE_URL,
 ) -> Dict[str, Any]:
@@ -151,6 +152,7 @@ def register_record(
     tx_hash = contract.functions.registerRecord(
         data_hash_formatted,
         source_url,
+        platform,
         author,
     ).transact({"from": account})
 
@@ -174,7 +176,7 @@ def verify_record(
     rpc_url: str = GANACHE_URL,
 ) -> Dict[str, Any]:
     """
-    Calls verifyRecord view function on FaceRegistry contract.
+    Calls getRecord view function on FaceRegistry contract.
     Returns verification status and metadata stored on chain.
     """
     w3 = get_web3(rpc_url)
@@ -182,14 +184,16 @@ def verify_record(
 
     data_hash_formatted = _format_data_hash(data_hash_bytes)
 
-    exists, timestamp, source_url, author, registered_by = contract.functions.verifyRecord(
+    func = getattr(contract.functions, "getRecord", contract.functions.verifyRecord)
+    exists, timestamp, source_url, platform, author, registered_by = func(
         data_hash_formatted
     ).call()
 
     return {
-        "is_verified": exists,
+        "is_verified": exists and timestamp > 0,
         "timestamp": timestamp,
         "source_url": source_url,
+        "platform": platform,
         "author": author,
         "registered_by": registered_by,
     }

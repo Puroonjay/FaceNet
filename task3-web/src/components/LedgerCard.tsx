@@ -2,7 +2,7 @@
 
 import React, { useState } from "react";
 import { BlockchainResult } from "@/types";
-import { Database, ShieldCheck, Copy, Check, Cpu, Loader2 } from "lucide-react";
+import { Database, ShieldCheck, Copy, Check, Cpu, Loader2, AlertTriangle } from "lucide-react";
 import { truncateHex, formatUtcTimestamp } from "@/lib/formatters";
 
 interface LedgerCardProps {
@@ -22,7 +22,11 @@ export const LedgerCard: React.FC<LedgerCardProps> = ({ blockchain, isLoading })
   return (
     <div
       className={`bg-slate-900/50 rounded-sm p-3 flex flex-col justify-between h-full space-y-3 transition-colors ${
-        blockchain?.is_verified ? "border border-slate-700/80" : "border border-slate-800"
+        blockchain?.is_tampered
+          ? "border border-amber-500/80 bg-amber-950/10"
+          : blockchain?.is_verified
+          ? "border border-slate-700/80"
+          : "border border-slate-800"
       }`}
     >
       {/* Header */}
@@ -34,7 +38,17 @@ export const LedgerCard: React.FC<LedgerCardProps> = ({ blockchain, isLoading })
           </h2>
         </div>
 
-        {blockchain?.is_verified ? (
+        {blockchain?.is_tampered ? (
+          <span className="text-[11px] font-medium text-amber-400 flex items-center gap-1.5">
+            <AlertTriangle className="w-3.5 h-3.5" />
+            Tamper Alert
+          </span>
+        ) : blockchain?.is_re_scan ? (
+          <span className="text-[11px] font-medium text-emerald-400 flex items-center gap-1.5">
+            <ShieldCheck className="w-3.5 h-3.5" />
+            Already Verified
+          </span>
+        ) : blockchain?.is_verified ? (
           <span className="text-[11px] font-medium text-emerald-400 flex items-center gap-1.5">
             <ShieldCheck className="w-3.5 h-3.5" />
             Attested On-Chain
@@ -51,12 +65,54 @@ export const LedgerCard: React.FC<LedgerCardProps> = ({ blockchain, isLoading })
       <div className="space-y-2.5 flex-1 flex flex-col justify-between">
         {blockchain ? (
           <div className="space-y-2">
-            {/* Block Number */}
+            {/* Tamper Alert Warning Box */}
+            {blockchain.is_tampered && blockchain.tamper_details && (
+              <div className="p-2.5 rounded-sm bg-amber-950/60 border border-amber-500/50 space-y-1.5 text-xs text-amber-200">
+                <div className="flex items-center gap-1.5 font-semibold text-amber-400 text-[11px] uppercase tracking-wide">
+                  <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                  Metadata Mismatch Detected
+                </div>
+                <div className="grid grid-cols-2 gap-1.5 text-[11px] pt-1">
+                  <div className="space-y-0.5">
+                    <span className="text-slate-400 text-[10px] block">On-Chain Author</span>
+                    <span className="text-emerald-300 font-medium block truncate">
+                      {blockchain.tamper_details.stored_author || "N/A"}
+                    </span>
+                  </div>
+                  <div className="space-y-0.5">
+                    <span className="text-slate-400 text-[10px] block">Live Scraped</span>
+                    <span className="text-amber-300 font-medium block truncate">
+                      {blockchain.tamper_details.live_author || "N/A"}
+                    </span>
+                  </div>
+                  <div className="space-y-0.5">
+                    <span className="text-slate-400 text-[10px] block">On-Chain Platform</span>
+                    <span className="text-emerald-300 font-medium block truncate">
+                      {blockchain.tamper_details.stored_platform || "N/A"}
+                    </span>
+                  </div>
+                  <div className="space-y-0.5">
+                    <span className="text-slate-400 text-[10px] block">Live Platform</span>
+                    <span className="text-amber-300 font-medium block truncate">
+                      {blockchain.tamper_details.live_platform || "N/A"}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Block Number / Attestation Status */}
             <div className="p-2.5 rounded-sm bg-slate-950 border border-slate-800/90 flex items-center justify-between">
               <div className="space-y-0.5">
-                <span className="text-[11px] text-slate-400 block">Confirmed Block</span>
+                <span className="text-[11px] text-slate-400 block">Confirmed Status</span>
                 <div className="text-sm font-bold text-emerald-400 font-mono">
-                  Block #{blockchain.block_number}
+                  {blockchain.block_number > 0
+                    ? `Block #${blockchain.block_number}`
+                    : blockchain.is_re_scan
+                    ? "Verified on Ledger"
+                    : blockchain.is_tampered
+                    ? "Tampered Asset"
+                    : "Attested"}
                 </div>
               </div>
               <div className="w-7 h-7 rounded-sm bg-emerald-950/80 border border-emerald-800 flex items-center justify-center text-emerald-400">
@@ -65,29 +121,31 @@ export const LedgerCard: React.FC<LedgerCardProps> = ({ blockchain, isLoading })
             </div>
 
             {/* Transaction Hash */}
-            <div className="p-2.5 rounded-sm bg-slate-950 border border-slate-800/90 space-y-1">
-              <div className="flex items-center justify-between text-xs">
-                <span className="text-slate-400 text-[11px]">Transaction Hash</span>
-                <button
-                  type="button"
-                  onClick={() => copyToClipboard(blockchain.tx_hash, "tx_hash")}
-                  className="flex items-center gap-1 text-slate-400 hover:text-white transition-colors"
-                >
-                  {copiedKey === "tx_hash" ? (
-                    <span className="text-emerald-400 flex items-center gap-0.5 font-medium text-[11px]">
-                      <Check className="w-3 h-3" /> Copied
-                    </span>
-                  ) : (
-                    <span className="flex items-center gap-0.5 text-[11px]">
-                      <Copy className="w-3 h-3" /> Copy
-                    </span>
-                  )}
-                </button>
+            {blockchain.tx_hash && blockchain.tx_hash !== "0x" && (
+              <div className="p-2.5 rounded-sm bg-slate-950 border border-slate-800/90 space-y-1">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-slate-400 text-[11px]">Transaction Hash</span>
+                  <button
+                    type="button"
+                    onClick={() => copyToClipboard(blockchain.tx_hash, "tx_hash")}
+                    className="flex items-center gap-1 text-slate-400 hover:text-white transition-colors"
+                  >
+                    {copiedKey === "tx_hash" ? (
+                      <span className="text-emerald-400 flex items-center gap-0.5 font-medium text-[11px]">
+                        <Check className="w-3 h-3" /> Copied
+                      </span>
+                    ) : (
+                      <span className="flex items-center gap-0.5 text-[11px]">
+                        <Copy className="w-3 h-3" /> Copy
+                      </span>
+                    )}
+                  </button>
+                </div>
+                <div className="rounded-sm bg-slate-900 border border-slate-800 p-1.5 font-mono text-xs text-slate-200 select-all break-all">
+                  {truncateHex(blockchain.tx_hash, 16, 12)}
+                </div>
               </div>
-              <div className="rounded-sm bg-slate-900 border border-slate-800 p-1.5 font-mono text-xs text-slate-200 select-all break-all">
-                {truncateHex(blockchain.tx_hash, 16, 12)}
-              </div>
-            </div>
+            )}
 
             {/* SHA-256 Digest */}
             <div className="p-2.5 rounded-sm bg-slate-950 border border-slate-800/90 space-y-1">
@@ -148,8 +206,22 @@ export const LedgerCard: React.FC<LedgerCardProps> = ({ blockchain, isLoading })
           </div>
           <div className="flex items-center justify-between px-3 py-1.5">
             <span className="text-slate-400 text-[11px]">Attestation State</span>
-            <span className={blockchain?.is_verified ? "text-emerald-400 font-medium" : "text-slate-500"}>
-              {blockchain?.is_verified ? "Confirmed" : "Idle"}
+            <span
+              className={
+                blockchain?.is_tampered
+                  ? "text-amber-400 font-medium"
+                  : blockchain?.is_verified
+                  ? "text-emerald-400 font-medium"
+                  : "text-slate-500"
+              }
+            >
+              {blockchain?.is_tampered
+                ? "Tamper Detected"
+                : blockchain?.is_re_scan
+                ? "Confirmed (Re-Scan)"
+                : blockchain?.is_verified
+                ? "Confirmed (New Block)"
+                : "Idle"}
             </span>
           </div>
         </div>

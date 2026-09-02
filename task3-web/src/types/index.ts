@@ -15,14 +15,40 @@ export interface MatchResult {
   match_type?: string;
 }
 
+export interface StoredRecord {
+  author?: string;
+  platform?: string;
+  source_url?: string;
+  timestamp?: number;
+  registered_by?: string;
+}
+
+export interface TamperDetails {
+  stored_author?: string;
+  live_author?: string;
+  stored_platform?: string;
+  live_platform?: string;
+  stored_url?: string;
+  live_url?: string;
+  author_mismatch?: boolean;
+  platform_mismatch?: boolean;
+  url_mismatch?: boolean;
+}
+
 export interface BlockchainResult {
   is_verified: boolean;
+  is_tampered?: boolean;
+  is_re_scan?: boolean;
+  verification_status?: "VERIFIED" | "ALREADY_VERIFIED" | "TAMPER_DETECTED" | string;
   tx_hash: string;
   block_number: number;
   gas_used: number;
   hash_hex: string;
   on_chain_timestamp: number;
   contract_address?: string;
+  registered_by?: string;
+  stored_record?: StoredRecord | null;
+  tamper_details?: TamperDetails | null;
 }
 
 export interface VerificationResponse {

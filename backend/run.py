@@ -238,19 +238,47 @@ def run_cli_mode(image_path: str, rpc_url: str = GANACHE_URL):
         )
         elapsed = time.time() - t0
         blockchain = pipeline_result.get("blockchain", {})
-        tx_hash = blockchain.get("tx_hash", "")
+        v_status = blockchain.get("verification_status", "VERIFIED")
+        tx_hash = blockchain.get("tx_hash", "0x")
         block_num = blockchain.get("block_number", 0)
         gas_used = blockchain.get("gas_used", 0)
         hash_hex = blockchain.get("hash_hex", "")
-        status_str = "VERIFIED" if blockchain.get("is_verified") else "UNVERIFIED"
+        on_chain_ts = blockchain.get("on_chain_timestamp", 0)
+        registered_by = blockchain.get("registered_by", "")
+        tamper_details = blockchain.get("tamper_details")
 
         print(f"  state root:     {hash_hex}")
-        print(f"  tx hash:        {tx_hash}")
-        print(f"  block:          #{block_num}")
-        print(f"  gas used:       {gas_used:,} units")
-        print(f"  latency:        {elapsed:.3f}s")
 
-        print(f"\n✓ status: {status_str} (block #{block_num}, {gas_used:,} gas, {elapsed:.3f}s)\n")
+        if v_status == "VERIFIED":
+            print(f"  tx hash:        {tx_hash}")
+            print(f"  block:          #{block_num}")
+            print(f"  gas used:       {gas_used:,} units")
+            print(f"  latency:        {elapsed:.3f}s")
+            print(f"\n✓ status: VERIFIED (block #{block_num}, {gas_used:,} gas, {elapsed:.3f}s)\n")
+
+        elif v_status == "ALREADY_VERIFIED":
+            if registered_by:
+                print(f"  registered by:  {registered_by}")
+            if on_chain_ts:
+                ts_str = time.strftime('%Y-%m-%d %H:%M:%S UTC', time.gmtime(on_chain_ts))
+                print(f"  registered at:  {ts_str}")
+            print(f"  latency:        {elapsed:.3f}s")
+            print(f"\n✓ status: ALREADY VERIFIED (Original Post Untampered)\n")
+
+        elif v_status == "TAMPER_DETECTED":
+            if registered_by:
+                print(f"  registered by:  {registered_by}")
+            if on_chain_ts:
+                ts_str = time.strftime('%Y-%m-%d %H:%M:%S UTC', time.gmtime(on_chain_ts))
+                print(f"  registered at:  {ts_str}")
+            print(f"  latency:        {elapsed:.3f}s")
+            print("\n⚠ TAMPER ALERT: Visual match verified, but post metadata has been manipulated!")
+            if tamper_details:
+                print(f"  • On-Chain Author:   {tamper_details.get('stored_author', 'N/A')}")
+                print(f"  • Live Scraped:      {tamper_details.get('live_author', 'N/A')}")
+                print(f"  • On-Chain Source:   {tamper_details.get('stored_platform', 'N/A')}")
+                print(f"  • Live Scraped:      {tamper_details.get('live_platform', 'N/A')}")
+            print()
     except Exception as e:
         print(f"\nerror: attestation failed: {e}\n", file=sys.stderr)
         sys.exit(1)
