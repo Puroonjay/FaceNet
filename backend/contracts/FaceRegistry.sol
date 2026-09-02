@@ -8,6 +8,7 @@ contract FaceRegistry {
         string platform;
         string author;
         uint256 timestamp;
+        uint256 blockNumber;
         address registeredBy;
     }
 
@@ -19,6 +20,7 @@ contract FaceRegistry {
         string platform,
         string author,
         uint256 timestamp,
+        uint256 blockNumber,
         address indexed registeredBy
     );
 
@@ -36,10 +38,19 @@ contract FaceRegistry {
             platform: platform,
             author: author,
             timestamp: block.timestamp,
+            blockNumber: block.number,
             registeredBy: msg.sender
         });
 
-        emit MediaRegistered(dataHash, sourceUrl, platform, author, block.timestamp, msg.sender);
+        emit MediaRegistered(
+            dataHash,
+            sourceUrl,
+            platform,
+            author,
+            block.timestamp,
+            block.number,
+            msg.sender
+        );
     }
 
     function getRecord(
@@ -50,6 +61,7 @@ contract FaceRegistry {
         returns (
             bool exists,
             uint256 timestamp,
+            uint256 blockNumber,
             string memory sourceUrl,
             string memory platform,
             string memory author,
@@ -60,6 +72,7 @@ contract FaceRegistry {
         return (
             record.timestamp > 0,
             record.timestamp,
+            record.blockNumber,
             record.sourceUrl,
             record.platform,
             record.author,
@@ -75,6 +88,7 @@ contract FaceRegistry {
         returns (
             bool exists,
             uint256 timestamp,
+            uint256 blockNumber,
             string memory sourceUrl,
             string memory platform,
             string memory author,

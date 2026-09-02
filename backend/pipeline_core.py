@@ -583,6 +583,7 @@ def run_pipeline(
     stored_platform = pre_check.get("platform", "")
     stored_author = pre_check.get("author", "")
     stored_timestamp = pre_check.get("timestamp", 0)
+    stored_block_number = pre_check.get("block_number", 0)
     stored_registered_by = pre_check.get("registered_by", "")
 
     tx_hash = "0x"
@@ -615,6 +616,7 @@ def run_pipeline(
             rpc_url=rpc_url,
         )
         on_chain_ts = post_verify.get("timestamp") or int(time.time())
+        stored_block_number = post_verify.get("block_number") or block_num
         stored_registered_by = post_verify.get("registered_by", "")
 
         verification_status = "VERIFIED"
@@ -627,6 +629,7 @@ def run_pipeline(
         # -------------------------------------------------------------
         # On-Chain Record Exists -> Compare Stored vs Live Metadata
         # -------------------------------------------------------------
+        block_num = stored_block_number
         norm_stored_author = _normalize_str(stored_author)
         norm_live_author = _normalize_str(author)
         norm_stored_platform = _normalize_str(stored_platform)
@@ -695,6 +698,7 @@ def run_pipeline(
                 "platform": stored_platform,
                 "source_url": stored_url,
                 "timestamp": stored_timestamp,
+                "block_number": stored_block_number,
                 "registered_by": stored_registered_by,
             } if exists else None,
             "tamper_details": tamper_details,

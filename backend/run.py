@@ -254,25 +254,27 @@ def run_cli_mode(image_path: str, rpc_url: str = GANACHE_URL):
             print(f"  block:          #{block_num}")
             print(f"  gas used:       {gas_used:,} units")
             print(f"  latency:        {elapsed:.3f}s")
-            print(f"\n✓ status: VERIFIED (block #{block_num}, {gas_used:,} gas, {elapsed:.3f}s)\n")
+            print(f"\n✓ status: VERIFIED (Minted at Block #{block_num}, {gas_used:,} gas, {elapsed:.3f}s)\n")
 
         elif v_status == "ALREADY_VERIFIED":
+            print(f"  anchored block: #{block_num}")
             if registered_by:
                 print(f"  registered by:  {registered_by}")
             if on_chain_ts:
                 ts_str = time.strftime('%Y-%m-%d %H:%M:%S UTC', time.gmtime(on_chain_ts))
                 print(f"  registered at:  {ts_str}")
             print(f"  latency:        {elapsed:.3f}s")
-            print(f"\n✓ status: ALREADY VERIFIED (Original Post Untampered)\n")
+            print(f"\n✓ status: ALREADY VERIFIED (Anchored at Block #{block_num})\n")
 
         elif v_status == "TAMPER_DETECTED":
+            print(f"  anchored block: #{block_num}")
             if registered_by:
                 print(f"  registered by:  {registered_by}")
             if on_chain_ts:
                 ts_str = time.strftime('%Y-%m-%d %H:%M:%S UTC', time.gmtime(on_chain_ts))
                 print(f"  registered at:  {ts_str}")
             print(f"  latency:        {elapsed:.3f}s")
-            print("\n⚠ TAMPER ALERT: Visual match verified, but post metadata has been manipulated!")
+            print(f"\n⚠ TAMPER ALERT: Visual match anchored at Block #{block_num}, but post metadata has been manipulated!")
             if tamper_details:
                 print(f"  • On-Chain Author:   {tamper_details.get('stored_author', 'N/A')}")
                 print(f"  • Live Scraped:      {tamper_details.get('live_author', 'N/A')}")

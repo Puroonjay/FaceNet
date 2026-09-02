@@ -20,6 +20,8 @@ export interface StoredRecord {
   platform?: string;
   source_url?: string;
   timestamp?: number;
+  blockNumber?: number;
+  block_number?: number;
   registered_by?: string;
 }
 
@@ -42,6 +44,7 @@ export interface BlockchainResult {
   verification_status?: "VERIFIED" | "ALREADY_VERIFIED" | "TAMPER_DETECTED" | string;
   tx_hash: string;
   block_number: number;
+  blockNumber?: number;
   gas_used: number;
   hash_hex: string;
   on_chain_timestamp: number;

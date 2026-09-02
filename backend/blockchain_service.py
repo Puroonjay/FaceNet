@@ -177,7 +177,7 @@ def verify_record(
 ) -> Dict[str, Any]:
     """
     Calls getRecord view function on FaceRegistry contract.
-    Returns verification status and metadata stored on chain.
+    Returns verification status, block number, and metadata stored on chain.
     """
     w3 = get_web3(rpc_url)
     contract = w3.eth.contract(address=w3.to_checksum_address(contract_addr), abi=abi)
@@ -185,13 +185,19 @@ def verify_record(
     data_hash_formatted = _format_data_hash(data_hash_bytes)
 
     func = getattr(contract.functions, "getRecord", contract.functions.verifyRecord)
-    exists, timestamp, source_url, platform, author, registered_by = func(
-        data_hash_formatted
-    ).call()
+    raw_res = func(data_hash_formatted).call()
+
+    # Handle 7-tuple (with blockNumber) or 6-tuple fallback
+    if len(raw_res) == 7:
+        exists, timestamp, block_number, source_url, platform, author, registered_by = raw_res
+    else:
+        exists, timestamp, source_url, platform, author, registered_by = raw_res
+        block_number = 0
 
     return {
         "is_verified": exists and timestamp > 0,
         "timestamp": timestamp,
+        "block_number": block_number,
         "source_url": source_url,
         "platform": platform,
         "author": author,
