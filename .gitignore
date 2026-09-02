@@ -19,6 +19,12 @@ task3-web/*.tsbuildinfo
 .env*.local
 *.env
 
+# Test assets / datasets
+Test images/
+test images/
+test-images/
+Test\ images/
+
 # IDE / OS
 .DS_Store
 *.pem

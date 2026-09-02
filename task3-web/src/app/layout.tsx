@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "FaceNet",
-  description: "Reverse Visual Search → Ganache EVM Ledger",
+  description: "High-precision verification platform combining OpenCV face detection, OSINT reverse visual search, and Ethereum smart contract attestation.",
 };
 
 export default function RootLayout({
@@ -27,7 +27,7 @@ export default function RootLayout({
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} dark h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col bg-neutral-950 text-neutral-100 font-mono selection:bg-emerald-500/30 selection:text-emerald-200">
+      <body className="min-h-full flex flex-col bg-slate-950 text-slate-100 font-sans selection:bg-indigo-500/20 selection:text-indigo-200">
         {children}
       </body>
     </html>

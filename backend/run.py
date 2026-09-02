@@ -16,6 +16,8 @@ except ImportError:
 from fastapi import FastAPI, File, UploadFile, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
+import cv2
+import numpy as np
 
 from blockchain_service import GANACHE_URL
 from pipeline_core import (
@@ -180,12 +182,29 @@ def run_cli_mode(image_path: str, rpc_url: str = GANACHE_URL):
     # Step 1: Face Crop
     print("\n[1/3] Detecting Face & Normalizing...")
     cropped_bytes, detection_info = detect_and_crop_face(image_bytes)
-    if detection_info.get("face_detected"):
-        bbox = detection_info.get("bounding_box", [])
-        print(f"      [+] Face localized at ROI [x:{bbox[0]}, y:{bbox[1]}, w:{bbox[2]}, h:{bbox[3]}]")
-        print(f"      [+] Cropped with 15% margin ({len(cropped_bytes) / 1024:.2f} KB)")
-    else:
-        print(f"      [*] No frontal face isolated; using full frame buffer ({len(cropped_bytes) / 1024:.2f} KB)")
+    
+    if isinstance(detection_info, (list, tuple)):
+        raw_box = list(detection_info)
+        try:
+            nparr = np.frombuffer(image_bytes, np.uint8)
+            img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+            h_img, w_img = (int(img.shape[0]), int(img.shape[1])) if img is not None else (0, 0)
+        except Exception:
+            h_img, w_img = 0, 0
+        
+        has_face = bool(raw_box != [0, 0, 0, 0] and raw_box != [0, 0, w_img, h_img])
+        if has_face:
+            print(f"      [+] Face localized at ROI [x:{raw_box[0]}, y:{raw_box[1]}, w:{raw_box[2]}, h:{raw_box[3]}]")
+            print(f"      [+] Cropped with 35% margin ({len(cropped_bytes) / 1024:.2f} KB)")
+        else:
+            print(f"      [*] No frontal face isolated; using full frame buffer ({len(cropped_bytes) / 1024:.2f} KB)")
+    elif isinstance(detection_info, dict):
+        if detection_info.get("face_detected"):
+            bbox = detection_info.get("bounding_box", [])
+            print(f"      [+] Face localized at ROI [x:{bbox[0]}, y:{bbox[1]}, w:{bbox[2]}, h:{bbox[3]}]")
+            print(f"      [+] Cropped with 35% margin ({len(cropped_bytes) / 1024:.2f} KB)")
+        else:
+            print(f"      [*] No frontal face isolated; using full frame buffer ({len(cropped_bytes) / 1024:.2f} KB)")
 
     # Step 2: Reverse Visual Search
     print("\n[2/3] Querying Reverse Visual Search Index (Full Image)...")
