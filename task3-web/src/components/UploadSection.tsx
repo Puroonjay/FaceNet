@@ -34,79 +34,98 @@ export const UploadSection: React.FC<UploadSectionProps> = ({
 
   const getCropPixelStats = () => {
     if (!imageDimensions) return null;
+
     const pxW = Math.round((cropBox.w / 100) * imageDimensions.width);
     const pxH = Math.round((cropBox.h / 100) * imageDimensions.height);
     const pxX = Math.round((cropBox.x / 100) * imageDimensions.width);
     const pxY = Math.round((cropBox.y / 100) * imageDimensions.height);
+
     return { pxW, pxH, pxX, pxY };
   };
 
   const cropStats = getCropPixelStats();
 
   return (
-    <div className="bg-slate-900/50 border border-slate-800 rounded-sm p-3">
+    <div className="rounded-sm border border-slate-800 bg-[#080c0b] p-3">
       <input
         ref={fileInputRef}
         type="file"
         accept=".png,.jpg,.jpeg,.webp,image/*"
         className="hidden"
         onChange={(e) => {
-          if (e.target.files?.[0]) onFileSelect(e.target.files[0]);
+          if (e.target.files?.[0]) {
+            onFileSelect(e.target.files[0]);
+          }
         }}
       />
 
-      <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3">
+      <div className="flex flex-col items-stretch justify-between gap-3 lg:flex-row lg:items-center">
         {/* Dropzone & Target Specs */}
         <div
           onClick={() => fileInputRef.current?.click()}
           onDragOver={(e) => e.preventDefault()}
           onDrop={(e) => {
             e.preventDefault();
-            if (e.dataTransfer.files?.[0]) onFileSelect(e.dataTransfer.files[0]);
+
+            if (e.dataTransfer.files?.[0]) {
+              onFileSelect(e.dataTransfer.files[0]);
+            }
           }}
-          className={`flex-1 flex flex-col sm:flex-row sm:items-center justify-between p-2.5 rounded-sm border transition-colors cursor-pointer gap-3 ${
+          className={`flex flex-1 cursor-pointer flex-col justify-between gap-3 rounded-sm border p-2.5 transition-colors sm:flex-row sm:items-center ${
             file
-              ? "bg-slate-950 border-slate-700/80 hover:border-slate-600"
-              : "bg-slate-950/60 border-slate-800 hover:border-slate-700"
+              ? "border-emerald-900/60 bg-[#050807] hover:border-emerald-800"
+              : "border-dashed border-slate-800 bg-[#050807]/70 hover:border-slate-700"
           }`}
         >
-          <div className="flex items-center gap-3 overflow-hidden">
+          <div className="flex min-w-0 items-center gap-3 overflow-hidden">
             {previewUrl ? (
-              <div className="w-10 h-10 rounded-sm border border-slate-700 overflow-hidden bg-slate-900 shrink-0">
+              <div className="h-10 w-10 shrink-0 overflow-hidden rounded-sm border border-emerald-900/60 bg-[#080c0b]">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={previewUrl} alt="Thumbnail" className="w-full h-full object-cover" />
+                <img
+                  src={previewUrl}
+                  alt="Thumbnail"
+                  className="h-full w-full object-cover"
+                />
               </div>
             ) : (
-              <div className="w-10 h-10 rounded-sm border border-slate-800 bg-slate-900 flex items-center justify-center text-slate-400 shrink-0">
-                <Upload className="w-4 h-4" />
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-sm border border-slate-800 bg-[#080c0b] text-slate-600">
+                <Upload className="h-4 w-4" />
               </div>
             )}
 
-            <div className="overflow-hidden space-y-0.5">
+            <div className="min-w-0 space-y-0.5 overflow-hidden">
               {file ? (
                 <>
                   <div className="flex items-center gap-2">
-                    <span className="text-xs font-semibold text-white truncate max-w-[220px] sm:max-w-[340px]">
+                    <span className="max-w-[220px] truncate font-mono text-[10px] font-semibold text-slate-200 sm:max-w-[340px]">
                       {file.name}
                     </span>
-                    <span className="text-[11px] px-1.5 py-0.2 rounded-sm bg-emerald-950/80 text-emerald-400 border border-emerald-800 shrink-0 font-medium">
+
+                    <span className="shrink-0 rounded-sm border border-emerald-900/80 bg-emerald-950/30 px-1.5 py-0.5 font-mono text-[9px] font-medium uppercase tracking-wide text-emerald-400">
                       Ready
                     </span>
                   </div>
-                  <div className="flex flex-wrap items-center gap-x-2 text-[11px] text-slate-400 font-mono">
+
+                  <div className="flex flex-wrap items-center gap-x-2 font-mono text-[9px] text-slate-600">
                     <span>{formatBytes(file.size)}</span>
-                    <span className="text-slate-600">•</span>
+
+                    <span className="text-slate-800">•</span>
+
                     <span>{file.type || "image/jpeg"}</span>
+
                     {imageDimensions && (
                       <>
-                        <span className="text-slate-600">•</span>
-                        <span>{imageDimensions.width}×{imageDimensions.height} px</span>
+                        <span className="text-slate-800">•</span>
+                        <span>
+                          {imageDimensions.width}×{imageDimensions.height} px
+                        </span>
                       </>
                     )}
+
                     {isCropMode && cropStats && (
                       <>
-                        <span className="text-slate-600">•</span>
-                        <span className="text-indigo-400">
+                        <span className="text-slate-800">•</span>
+                        <span className="text-emerald-500">
                           ROI: {cropStats.pxW}×{cropStats.pxH} px
                         </span>
                       </>
@@ -115,10 +134,11 @@ export const UploadSection: React.FC<UploadSectionProps> = ({
                 </>
               ) : (
                 <div>
-                  <span className="text-xs font-medium text-slate-300 block">
+                  <span className="block font-mono text-[10px] font-medium uppercase tracking-wide text-slate-300">
                     Upload image payload
                   </span>
-                  <span className="text-[11px] text-slate-500">
+
+                  <span className="text-[9px] text-slate-600">
                     Click to browse or drop an image file (.png, .jpg, .webp)
                   </span>
                 </div>
@@ -127,7 +147,7 @@ export const UploadSection: React.FC<UploadSectionProps> = ({
           </div>
 
           {/* Action Chips */}
-          <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
+          <div className="flex shrink-0 items-center gap-2 self-end sm:self-center">
             {file && (
               <button
                 type="button"
@@ -135,31 +155,33 @@ export const UploadSection: React.FC<UploadSectionProps> = ({
                   e.stopPropagation();
                   onClear();
                 }}
-                className="p-1 rounded-sm text-slate-400 hover:text-rose-400 hover:bg-slate-900 border border-transparent hover:border-slate-800 transition-colors"
+                className="flex h-7 w-7 items-center justify-center rounded-sm border border-transparent text-slate-600 transition-colors hover:border-rose-900/60 hover:bg-rose-950/10 hover:text-rose-400"
                 title="Clear image"
               >
-                <X className="w-4 h-4" />
+                <X className="h-3.5 w-3.5" />
               </button>
             )}
-            <span className="px-2.5 py-1 rounded-sm bg-slate-900 hover:bg-slate-800 text-xs text-slate-300 border border-slate-800 font-medium">
+
+            <span className="rounded-sm border border-slate-800 bg-[#080c0b] px-2.5 py-1.5 font-mono text-[9px] uppercase tracking-wide text-slate-400 transition-colors">
               {file ? "Change" : "Browse"}
             </span>
           </div>
         </div>
 
         {/* Toolbar Action Buttons */}
-        <div className="flex flex-wrap items-center gap-2 shrink-0">
+        <div className="flex shrink-0 flex-wrap items-center gap-2">
           {file && (
             <button
               type="button"
               onClick={onToggleCrop}
-              className={`flex items-center gap-1.5 px-3 py-2 rounded-sm text-xs border transition-colors ${
+              className={`flex items-center gap-1.5 rounded-sm border px-3 py-2 font-mono text-[9px] uppercase tracking-wide transition-colors ${
                 isCropMode
-                  ? "bg-indigo-950/80 text-indigo-300 border-indigo-700 font-medium"
-                  : "bg-slate-950 text-slate-400 border-slate-800 hover:text-slate-200 hover:border-slate-700"
+                  ? "border-emerald-800 bg-emerald-950/30 font-semibold text-emerald-400"
+                  : "border-slate-800 bg-[#050807] text-slate-500 hover:border-slate-700 hover:text-slate-300"
               }`}
             >
-              <Crop className="w-3.5 h-3.5" />
+              <Crop className="h-3.5 w-3.5" />
+
               <span>Crop: {isCropMode ? "Active" : "Off"}</span>
             </button>
           )}
@@ -168,25 +190,26 @@ export const UploadSection: React.FC<UploadSectionProps> = ({
             type="button"
             disabled={!file || isLoading}
             onClick={onExecute}
-            className={`flex items-center justify-center gap-2 px-5 py-2 rounded-sm text-xs font-semibold tracking-wide transition-colors min-w-[180px] ${
+            className={`flex min-w-[180px] items-center justify-center gap-2 rounded-sm border px-5 py-2 font-mono text-[9px] font-semibold uppercase tracking-[0.08em] transition-colors ${
               isLoading
-                ? "bg-slate-800 text-slate-400 border border-slate-700 cursor-wait"
+                ? "cursor-wait border-slate-700 bg-slate-900 text-slate-500"
                 : !file
-                ? "bg-slate-900 border border-slate-800 text-slate-500 cursor-not-allowed"
-                : "bg-indigo-600 hover:bg-indigo-500 text-white border border-indigo-500 cursor-pointer"
+                  ? "cursor-not-allowed border-slate-800 bg-[#080c0b] text-slate-600"
+                  : "cursor-pointer border-emerald-700 bg-emerald-950/40 text-emerald-300 hover:border-emerald-500 hover:bg-emerald-900/40 hover:text-emerald-200"
             }`}
           >
             {isLoading ? (
               <>
-                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
                 <span>Running Pipeline...</span>
               </>
             ) : (
               <>
-                <Play className="w-3.5 h-3.5 fill-current" />
+                <Play className="h-3.5 w-3.5 fill-current" />
+
                 <span>
                   {isCropMode && cropStats
-                    ? `Verify Crop (${cropStats.pxW}×{cropStats.pxH})`
+                    ? `Verify Crop (${cropStats.pxW}×${cropStats.pxH})`
                     : "Run Pipeline"}
                 </span>
               </>

@@ -2,7 +2,15 @@
 
 import React, { useState, useEffect } from "react";
 import { PipelinePhase, VerificationResponse } from "@/types";
-import { Check, Loader2, UploadCloud, Scan, Globe, Database, Activity } from "lucide-react";
+import {
+  Check,
+  Loader2,
+  UploadCloud,
+  Scan,
+  Globe,
+  Database,
+  Activity,
+} from "lucide-react";
 import { formatBytes } from "@/lib/formatters";
 
 interface LivePipelineMonitorProps {
@@ -22,13 +30,16 @@ export const LivePipelineMonitor: React.FC<LivePipelineMonitorProps> = ({
 
   useEffect(() => {
     let interval: NodeJS.Timeout | null = null;
+
     if (isLoading) {
       const start = Date.now();
       setElapsedMs(0);
+
       interval = setInterval(() => {
         setElapsedMs(Date.now() - start);
       }, 50);
     }
+
     return () => {
       if (interval) clearInterval(interval);
     };
@@ -44,7 +55,12 @@ export const LivePipelineMonitor: React.FC<LivePipelineMonitorProps> = ({
     }
 
     if (phase === "COMPLETE" && result) {
-      if (stageIndex === 0) return { status: "done", label: `${formatBytes(file?.size || 0)}` };
+      if (stageIndex === 0)
+        return {
+          status: "done",
+          label: `${formatBytes(file?.size || 0)}`,
+        };
+
       if (stageIndex === 1) {
         return {
           status: "done",
@@ -53,38 +69,66 @@ export const LivePipelineMonitor: React.FC<LivePipelineMonitorProps> = ({
             : "Full Frame",
         };
       }
-      if (stageIndex === 2) return { status: "done", label: result.match.source || "Match Resolved" };
-      if (stageIndex === 3) return { status: "done", label: `Block #${result.blockchain.block_number}` };
+
+      if (stageIndex === 2)
+        return {
+          status: "done",
+          label: result.match.source || "Match Resolved",
+        };
+
+      if (stageIndex === 3)
+        return {
+          status: "done",
+          label: `Block #${result.blockchain.block_number}`,
+        };
     }
 
     if (phase === "IDLE") {
-      if (stageIndex === 0 && file) return { status: "done", label: `${formatBytes(file.size)} Ready` };
+      if (stageIndex === 0 && file)
+        return {
+          status: "done",
+          label: `${formatBytes(file.size)} Ready`,
+        };
+
       return { status: "pending", label: "Pending" };
     }
 
     if (phase === "INGESTING") {
-      if (stageIndex === 0) return { status: "running", label: "Normalizing..." };
+      if (stageIndex === 0)
+        return { status: "running", label: "Normalizing..." };
+
       return { status: "pending", label: "Pending" };
     }
 
     if (phase === "DETECTING") {
       if (stageIndex === 0) return { status: "done", label: "Ingested" };
-      if (stageIndex === 1) return { status: "running", label: "Haar + YuNet..." };
+
+      if (stageIndex === 1)
+        return { status: "running", label: "Haar + YuNet..." };
+
       return { status: "pending", label: "Pending" };
     }
 
     if (phase === "RESOLVING_OSINT") {
       if (stageIndex === 0) return { status: "done", label: "Ingested" };
+
       if (stageIndex === 1) return { status: "done", label: "Face Localized" };
-      if (stageIndex === 2) return { status: "running", label: "Lens Graph..." };
+
+      if (stageIndex === 2)
+        return { status: "running", label: "Lens Graph..." };
+
       return { status: "pending", label: "Pending" };
     }
 
     if (phase === "ATTESTING_EVM") {
       if (stageIndex === 0) return { status: "done", label: "Ingested" };
+
       if (stageIndex === 1) return { status: "done", label: "Face Localized" };
+
       if (stageIndex === 2) return { status: "done", label: "Match Found" };
-      if (stageIndex === 3) return { status: "running", label: "Mining Block..." };
+
+      if (stageIndex === 3)
+        return { status: "running", label: "Mining Block..." };
     }
 
     return { status: "pending", label: "Pending" };
@@ -94,16 +138,22 @@ export const LivePipelineMonitor: React.FC<LivePipelineMonitorProps> = ({
     switch (phase) {
       case "INGESTING":
         return "1/4 Ingesting image buffer and normalizing aspect ratio";
+
       case "DETECTING":
         return "2/4 Executing OpenCV face detection & ROI coordinate isolation";
+
       case "RESOLVING_OSINT":
         return "3/4 Querying visual reverse search index (Google Lens graph)";
+
       case "ATTESTING_EVM":
         return "4/4 Computing SHA-256 fingerprint & submitting smart contract proof";
+
       case "COMPLETE":
         return "Pipeline complete — All stages verified on-chain";
+
       case "ERROR":
         return "Pipeline execution halted";
+
       default:
         return `Buffer Loaded: ${file?.name}`;
     }
@@ -120,30 +170,36 @@ export const LivePipelineMonitor: React.FC<LivePipelineMonitorProps> = ({
     <div
       className={`rounded-sm border p-2.5 transition-all ${
         isLoading
-          ? "bg-slate-900/90 border-indigo-500/70"
+          ? "border-emerald-800/70 bg-[#0a100d]"
           : phase === "COMPLETE"
-          ? "bg-slate-900/60 border-emerald-900/70"
-          : "bg-slate-900/40 border-slate-800"
+            ? "border-emerald-900/70 bg-[#080d0b]"
+            : phase === "ERROR"
+              ? "border-rose-900/70 bg-[#0d0909]"
+              : "border-slate-800 bg-[#080c0b]"
       }`}
     >
       {/* Live Status Header */}
-      <div className="flex items-center justify-between pb-2 mb-2 border-b border-slate-800/80 text-xs">
-        <div className="flex items-center gap-2 overflow-hidden">
+      <div className="mb-2 flex items-center justify-between border-b border-slate-800/80 pb-2 text-xs">
+        <div className="flex min-w-0 items-center gap-2 overflow-hidden">
           {isLoading ? (
-            <Loader2 className="w-3.5 h-3.5 animate-spin text-indigo-400 shrink-0" />
+            <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-emerald-400" />
           ) : phase === "COMPLETE" ? (
-            <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+            <Check className="h-3.5 w-3.5 shrink-0 text-emerald-400" />
+          ) : phase === "ERROR" ? (
+            <Activity className="h-3.5 w-3.5 shrink-0 text-rose-400" />
           ) : (
-            <Activity className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+            <Activity className="h-3.5 w-3.5 shrink-0 text-slate-500" />
           )}
 
           <span
-            className={`font-medium truncate ${
+            className={`truncate font-mono text-[10px] ${
               isLoading
-                ? "text-indigo-300"
+                ? "text-emerald-300"
                 : phase === "COMPLETE"
-                ? "text-emerald-400"
-                : "text-slate-300"
+                  ? "text-emerald-400"
+                  : phase === "ERROR"
+                    ? "text-rose-400"
+                    : "text-slate-400"
             }`}
           >
             {getActiveTitle()}
@@ -151,14 +207,15 @@ export const LivePipelineMonitor: React.FC<LivePipelineMonitorProps> = ({
         </div>
 
         {/* Live Elapsed Time or Confirmation */}
-        <div className="flex items-center gap-2 shrink-0 font-mono text-[11px]">
+        <div className="ml-2 flex shrink-0 items-center gap-2 font-mono text-[10px]">
           {isLoading && (
-            <span className="text-indigo-300 bg-indigo-950/80 px-1.5 py-0.2 rounded-sm border border-indigo-800">
+            <span className="rounded-sm border border-emerald-900/80 bg-emerald-950/30 px-1.5 py-0.5 text-emerald-400">
               {(elapsedMs / 1000).toFixed(2)}s
             </span>
           )}
+
           {phase === "COMPLETE" && (
-            <span className="text-emerald-400 font-sans text-xs">
+            <span className="font-mono text-[9px] uppercase tracking-wide text-emerald-400">
               Complete
             </span>
           )}
@@ -166,58 +223,67 @@ export const LivePipelineMonitor: React.FC<LivePipelineMonitorProps> = ({
       </div>
 
       {/* 4-Stage Live Node Grid */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+      <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
         {STAGES.map((stage, idx) => {
           const { status, label } = getStageState(idx);
 
           return (
             <div
               key={stage.id}
-              className={`p-2 rounded-sm border flex items-center gap-2 text-xs transition-colors ${
+              className={`flex items-center gap-2 rounded-sm border p-2 text-xs transition-colors ${
                 status === "running"
-                  ? "bg-slate-950 border-indigo-500 text-white"
+                  ? "border-emerald-800/80 bg-emerald-950/20 text-white"
                   : status === "done"
-                  ? "bg-slate-950/80 border-slate-800 text-slate-200"
-                  : "bg-slate-950/40 border-slate-800/60 text-slate-500"
+                    ? "border-slate-800 bg-[#050807] text-slate-200"
+                    : status === "error"
+                      ? "border-rose-900/70 bg-rose-950/10 text-rose-300"
+                      : "border-slate-800/60 bg-[#050807]/60 text-slate-500"
               }`}
             >
               <div
-                className={`w-5 h-5 rounded-sm flex items-center justify-center shrink-0 text-[11px] font-mono ${
+                className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-sm text-[10px] font-mono ${
                   status === "done"
-                    ? "bg-emerald-950 text-emerald-400 border border-emerald-800"
+                    ? "border border-emerald-900/80 bg-emerald-950/30 text-emerald-400"
                     : status === "running"
-                    ? "bg-indigo-950 text-indigo-300 border border-indigo-700"
-                    : "bg-slate-900 text-slate-500 border border-slate-800"
+                      ? "border border-emerald-800 bg-emerald-950/40 text-emerald-300"
+                      : status === "error"
+                        ? "border border-rose-900 bg-rose-950/30 text-rose-400"
+                        : "border border-slate-800 bg-[#080c0b] text-slate-600"
                 }`}
               >
                 {status === "done" ? (
-                  <Check className="w-3 h-3" />
+                  <Check className="h-3 w-3" />
                 ) : status === "running" ? (
-                  <Loader2 className="w-3 h-3 animate-spin text-indigo-400" />
+                  <Loader2 className="h-3 w-3 animate-spin text-emerald-400" />
                 ) : (
                   <span>{stage.id}</span>
                 )}
               </div>
 
-              <div className="overflow-hidden min-w-0">
+              <div className="min-w-0 overflow-hidden">
                 <span
-                  className={`font-medium truncate block leading-tight ${
+                  className={`block truncate font-mono text-[9px] leading-tight uppercase tracking-wide ${
                     status === "running"
-                      ? "text-indigo-200 font-semibold"
+                      ? "font-semibold text-emerald-300"
                       : status === "done"
-                      ? "text-slate-200"
-                      : "text-slate-400"
+                        ? "text-slate-300"
+                        : status === "error"
+                          ? "text-rose-300"
+                          : "text-slate-500"
                   }`}
                 >
                   {stage.name}
                 </span>
+
                 <span
-                  className={`text-[10px] font-mono truncate block ${
+                  className={`block truncate font-mono text-[9px] ${
                     status === "running"
-                      ? "text-indigo-400 font-semibold"
+                      ? "font-semibold text-emerald-400"
                       : status === "done"
-                      ? "text-emerald-400"
-                      : "text-slate-500"
+                        ? "text-emerald-500"
+                        : status === "error"
+                          ? "text-rose-400"
+                          : "text-slate-600"
                   }`}
                 >
                   {label}

@@ -1,7 +1,14 @@
 "use client";
 
 import React from "react";
-import { ShieldCheck, RefreshCw, FileCode, CheckCircle2, AlertCircle, Loader2 } from "lucide-react";
+import {
+  ShieldCheck,
+  RefreshCw,
+  FileCode,
+  CheckCircle2,
+  AlertCircle,
+  Loader2,
+} from "lucide-react";
 import { PipelinePhase } from "@/types";
 
 interface HeaderProps {
@@ -27,32 +34,35 @@ export const Header: React.FC<HeaderProps> = ({
     switch (phase) {
       case "COMPLETE":
         return (
-          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-xs font-medium bg-emerald-950/60 text-emerald-400 border border-emerald-800/80">
-            <CheckCircle2 className="w-3 h-3" />
+          <span className="inline-flex items-center gap-1.5 rounded-sm border border-emerald-900/80 bg-emerald-950/30 px-2 py-1 font-mono text-[9px] font-semibold uppercase tracking-wide text-emerald-400">
+            <CheckCircle2 className="h-3 w-3" />
             Verified
           </span>
         );
+
       case "ERROR":
         return (
-          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-xs font-medium bg-rose-950/60 text-rose-400 border border-rose-800/80">
-            <AlertCircle className="w-3 h-3" />
+          <span className="inline-flex items-center gap-1.5 rounded-sm border border-rose-900/80 bg-rose-950/30 px-2 py-1 font-mono text-[9px] font-semibold uppercase tracking-wide text-rose-400">
+            <AlertCircle className="h-3 w-3" />
             Failed
           </span>
         );
+
       case "DETECTING":
       case "RESOLVING_OSINT":
       case "ATTESTING_EVM":
       case "INGESTING":
         return (
-          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-xs font-medium bg-indigo-950/60 text-indigo-300 border border-indigo-800/80">
-            <Loader2 className="w-3 h-3 animate-spin" />
+          <span className="inline-flex items-center gap-1.5 rounded-sm border border-emerald-900/70 bg-emerald-950/20 px-2 py-1 font-mono text-[9px] font-semibold uppercase tracking-wide text-emerald-400">
+            <Loader2 className="h-3 w-3 animate-spin" />
             Executing
           </span>
         );
+
       default:
         return (
-          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-xs font-medium bg-slate-900 text-slate-400 border border-slate-800">
-            <span className="w-1.5 h-1.5 rounded-full bg-slate-500" />
+          <span className="inline-flex items-center gap-1.5 rounded-sm border border-slate-800 bg-[#050807] px-2 py-1 font-mono text-[9px] font-semibold uppercase tracking-wide text-slate-500">
+            <span className="h-1.5 w-1.5 rounded-full bg-slate-600" />
             Idle
           </span>
         );
@@ -60,57 +70,85 @@ export const Header: React.FC<HeaderProps> = ({
   };
 
   return (
-    <header className="border-b border-slate-800 bg-slate-900/90 sticky top-0 z-30 px-4 py-2">
-      <div className="max-w-[96rem] mx-auto flex items-center justify-between">
+    <header className="sticky top-0 z-30 border-b border-slate-800 bg-[#080c0b]/95 px-3 py-2 backdrop-blur-sm sm:px-4">
+      <div className="mx-auto flex min-h-[38px] max-w-[96rem] items-center justify-between gap-3">
         {/* Left: Product & Service Identifier */}
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2">
-            <div className="w-6 h-6 rounded bg-indigo-600 text-white flex items-center justify-center font-bold text-xs">
-              <ShieldCheck className="w-3.5 h-3.5" />
+        <div className="flex min-w-0 items-center gap-3">
+          <div className="flex shrink-0 items-center gap-2">
+            <div className="flex h-7 w-7 items-center justify-center rounded border border-[#18800b]/40 bg-[#18800b] text-[#161214]">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className="h-4 w-4"
+              >
+                {/* 4 Corners (Face Scan Frame) */}
+                <path d="M3 7V5a2 2 0 0 1 2-2h2" />
+                <path d="M17 3h2a2 2 0 0 1 2 2v2" />
+                <path d="M21 17v2a2 2 0 0 1-2 2h-2" />
+                <path d="M7 21H5a2 2 0 0 1-2-2v-2" />
+
+                {/* Network / Face Nodes */}
+                <circle cx="9" cy="9" r="1" fill="currentColor" />
+                <circle cx="15" cy="9" r="1" fill="currentColor" />
+                <circle cx="12" cy="13" r="1" fill="currentColor" />
+
+                <path d="M9 9l3 4 3-4" strokeWidth="1.5" />
+                <path d="M10 16c1 .5 3 .5 4 0" strokeWidth="1.5" />
+              </svg>
             </div>
-            <span className="font-semibold text-sm text-white tracking-tight">FaceNet</span>
+
+            <span className="font-mono text-sm font-semibold tracking-tight text-white">
+              FaceNet
+            </span>
           </div>
 
-          <div className="h-4 w-px bg-slate-800 hidden sm:block" />
+          <div className="hidden h-4 w-px bg-slate-800 sm:block" />
 
-          <span className="text-xs text-slate-400 hidden sm:inline font-mono">
+          <span className="hidden truncate font-mono text-[10px] uppercase tracking-[0.08em] text-slate-500 sm:inline">
             Pipeline: Vision → OSINT → EVM
           </span>
 
           {contractAddress && (
-            <span className="text-[11px] font-mono text-slate-400 bg-slate-950 px-2 py-0.5 rounded border border-slate-800 hidden md:inline truncate max-w-[240px]">
-              Contract: {contractAddress.slice(0, 8)}...{contractAddress.slice(-6)}
+            <span className="hidden max-w-[240px] truncate rounded-sm border border-slate-800 bg-[#050807] px-2 py-1 font-mono text-[9px] text-slate-500 md:inline">
+              Contract: {contractAddress.slice(0, 8)}...
+              {contractAddress.slice(-6)}
             </span>
           )}
         </div>
 
         {/* Right: Telemetry & Actions */}
-        <div className="flex items-center gap-2 text-xs">
+        <div className="flex shrink-0 items-center gap-1.5 text-xs">
           {/* Node Health Status */}
-          <div className="flex items-center gap-2 px-2.5 py-1 rounded bg-slate-950 border border-slate-800 font-mono text-[11px]">
+          <div className="hidden items-center gap-2 rounded-sm border border-slate-800 bg-[#050807] px-2.5 py-1.5 font-mono text-[9px] sm:flex">
             <span
-              className={`w-1.5 h-1.5 rounded-full ${
+              className={`h-1.5 w-1.5 rounded-full ${
                 backendConnected === true
                   ? "bg-emerald-500"
                   : backendConnected === false
-                  ? "bg-rose-500"
-                  : "bg-amber-400 animate-pulse"
+                    ? "bg-rose-500"
+                    : "animate-pulse bg-amber-400"
               }`}
             />
-            <span className="text-slate-300">
+
+            <span className="max-w-[180px] truncate text-slate-400">
               {backendConnected === true
                 ? rpcUrl.replace(/^https?:\/\//, "")
                 : backendConnected === false
-                ? "API Offline"
-                : "Checking..."}
+                  ? "API Offline"
+                  : "Checking..."}
             </span>
+
             <button
               type="button"
               onClick={onRefreshHealth}
-              className="text-slate-500 hover:text-slate-300 transition-colors"
+              className="text-slate-600 transition-colors hover:text-emerald-400"
               title="Ping Backend"
             >
-              <RefreshCw className="w-3 h-3" />
+              <RefreshCw className="h-3 w-3" />
             </button>
           </div>
 
@@ -122,10 +160,11 @@ export const Header: React.FC<HeaderProps> = ({
             <button
               type="button"
               onClick={onOpenJsonModal}
-              className="flex items-center gap-1.5 px-2.5 py-1 rounded bg-slate-950 hover:bg-slate-800 text-slate-200 border border-slate-800 font-mono text-[11px] transition-colors"
+              className="flex h-7 items-center gap-1.5 rounded-sm border border-slate-800 bg-[#050807] px-2.5 font-mono text-[9px] uppercase tracking-wide text-slate-400 transition-colors hover:border-emerald-900/70 hover:bg-emerald-950/20 hover:text-emerald-400"
             >
-              <FileCode className="w-3.5 h-3.5 text-indigo-400" />
-              <span>JSON Receipt</span>
+              <FileCode className="h-3.5 w-3.5 text-emerald-500" />
+              <span className="hidden sm:inline">JSON Receipt</span>
+              <span className="sm:hidden">JSON</span>
             </button>
           )}
         </div>

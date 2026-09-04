@@ -25,25 +25,43 @@ const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
 export default function FaceNetDashboard() {
   const [file, setFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-  const [imageDimensions, setImageDimensions] = useState<{ width: number; height: number } | null>(null);
+  const [imageDimensions, setImageDimensions] = useState<{
+    width: number;
+    height: number;
+  } | null>(null);
   const [phase, setPhase] = useState<PipelinePhase>("IDLE");
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [result, setResult] = useState<VerificationResponse | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [backendConnected, setBackendConnected] = useState<boolean | null>(null);
+  const [backendConnected, setBackendConnected] = useState<boolean | null>(
+    null,
+  );
   const [isJsonModalOpen, setIsJsonModalOpen] = useState<boolean>(false);
 
   // Interactive ROI Crop State
   const [isCropMode, setIsCropMode] = useState<boolean>(false);
-  const [cropBox, setCropBox] = useState<CropBox>({ x: 15, y: 15, w: 70, h: 70 });
+  const [cropBox, setCropBox] = useState<CropBox>({
+    x: 15,
+    y: 15,
+    w: 70,
+    h: 70,
+  });
   const [activeDragHandle, setActiveDragHandle] = useState<string | null>(null);
-  const [dragStart, setDragStart] = useState<{ clientX: number; clientY: number; box: CropBox } | null>(null);
+  const [dragStart, setDragStart] = useState<{
+    clientX: number;
+    clientY: number;
+    box: CropBox;
+  } | null>(null);
 
   // System Activity & Telemetry Logs
   const [logs, setLogs] = useState<SystemLogEntry[]>([]);
 
   const addLog = useCallback(
-    (subsystem: SystemLogEntry["subsystem"], level: SystemLogEntry["level"], message: string) => {
+    (
+      subsystem: SystemLogEntry["subsystem"],
+      level: SystemLogEntry["level"],
+      message: string,
+    ) => {
       const now = new Date();
       const timeStr = now.toISOString().substring(11, 23);
       setLogs((prev) => [
@@ -57,7 +75,7 @@ export default function FaceNetDashboard() {
         },
       ]);
     },
-    []
+    [],
   );
 
   const checkBackendHealth = useCallback(async () => {
@@ -81,7 +99,9 @@ export default function FaceNetDashboard() {
       });
 
       clearTimeout(timeoutId);
-      const isOk = Boolean(res && (res.ok || res.status === 404 || res.status === 200));
+      const isOk = Boolean(
+        res && (res.ok || res.status === 404 || res.status === 200),
+      );
       setBackendConnected(isOk);
 
       if (isOk) {
@@ -89,7 +109,10 @@ export default function FaceNetDashboard() {
           const rootRes = await fetch(`${BACKEND_URL}/`);
           if (rootRes.ok) {
             const rootJson = await rootRes.json();
-            if (rootJson.contract_address && !result?.blockchain?.contract_address) {
+            if (
+              rootJson.contract_address &&
+              !result?.blockchain?.contract_address
+            ) {
               setResult((prev) => {
                 if (!prev) return null;
                 return {
@@ -123,7 +146,11 @@ export default function FaceNetDashboard() {
     if (backendConnected === true) {
       addLog("NET", "OK", `Backend node active at ${BACKEND_URL}`);
     } else if (backendConnected === false) {
-      addLog("NET", "WARN", `Backend unreachable at ${BACKEND_URL}. Check FastAPI/Ganache.`);
+      addLog(
+        "NET",
+        "WARN",
+        `Backend unreachable at ${BACKEND_URL}. Check FastAPI/Ganache.`,
+      );
     }
   }, [backendConnected, addLog]);
 
@@ -148,13 +175,16 @@ export default function FaceNetDashboard() {
 
     const img = new Image();
     img.onload = () => {
-      setImageDimensions({ width: img.naturalWidth, height: img.naturalHeight });
+      setImageDimensions({
+        width: img.naturalWidth,
+        height: img.naturalHeight,
+      });
       addLog(
         "VISION",
         "INFO",
         `Ingested ${selectedFile.name} [${img.naturalWidth}×${img.naturalHeight}px, ${(
           selectedFile.size / 1024
-        ).toFixed(1)} KB]`
+        ).toFixed(1)} KB]`,
       );
     };
     img.src = url;
@@ -182,8 +212,14 @@ export default function FaceNetDashboard() {
       img.onload = () => {
         const srcX = Math.round((cropBox.x / 100) * img.naturalWidth);
         const srcY = Math.round((cropBox.y / 100) * img.naturalHeight);
-        const srcW = Math.max(10, Math.round((cropBox.w / 100) * img.naturalWidth));
-        const srcH = Math.max(10, Math.round((cropBox.h / 100) * img.naturalHeight));
+        const srcW = Math.max(
+          10,
+          Math.round((cropBox.w / 100) * img.naturalWidth),
+        );
+        const srcH = Math.max(
+          10,
+          Math.round((cropBox.h / 100) * img.naturalHeight),
+        );
 
         const canvas = document.createElement("canvas");
         canvas.width = srcW;
@@ -204,7 +240,7 @@ export default function FaceNetDashboard() {
             }
           },
           "image/jpeg",
-          0.95
+          0.95,
         );
       };
       img.onerror = () => resolve(file);
@@ -228,7 +264,11 @@ export default function FaceNetDashboard() {
       formData.append("file", fileToSend);
 
       setPhase("DETECTING");
-      addLog("VISION", "INFO", "Running OpenCV HaarCascade / YuNet detector...");
+      addLog(
+        "VISION",
+        "INFO",
+        "Running OpenCV HaarCascade / YuNet detector...",
+      );
 
       setTimeout(() => {
         setPhase((curr) => (curr === "DETECTING" ? "RESOLVING_OSINT" : curr));
@@ -236,7 +276,9 @@ export default function FaceNetDashboard() {
       }, 700);
 
       setTimeout(() => {
-        setPhase((curr) => (curr === "RESOLVING_OSINT" ? "ATTESTING_EVM" : curr));
+        setPhase((curr) =>
+          curr === "RESOLVING_OSINT" ? "ATTESTING_EVM" : curr,
+        );
         addLog("EVM", "INFO", "Mining attestation transaction on Ganache...");
       }, 1400);
 
@@ -264,13 +306,13 @@ export default function FaceNetDashboard() {
         "OK",
         data.detection?.face_detected
           ? `Face localized [${data.detection.bounding_box?.join(", ")}]`
-          : "Full frame processed (no frontal face detected)"
+          : "Full frame processed (no frontal face detected)",
       );
 
       addLog(
         "OSINT",
         "OK",
-        `Source match: ${data.match.source} (${data.match.similarity || "Feature Match"})`
+        `Source match: ${data.match.source} (${data.match.similarity || "Feature Match"})`,
       );
 
       addLog(
@@ -278,8 +320,8 @@ export default function FaceNetDashboard() {
         "OK",
         `Block #${data.blockchain.block_number} mined (Gas: ${data.blockchain.gas_used}, Hash: ${data.blockchain.hash_hex.slice(
           0,
-          12
-        )}...)`
+          12,
+        )}...)`,
       );
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Execution failed";
@@ -305,7 +347,8 @@ export default function FaceNetDashboard() {
   }, [file, isLoading, isJsonModalOpen]);
 
   return (
-    <div className="min-h-screen bg-[#090d16] text-slate-100 flex flex-col font-sans selection:bg-indigo-500/20 selection:text-indigo-200">
+    // <div className="min-h-screen bg-[#090d16] text-slate-100 flex flex-col font-sans selection:bg-indigo-500/20 selection:text-indigo-200">
+    <div className="min-h-screen bg-[#050807] text-slate-100 flex flex-col font-sans selection:bg-emerald-500/20 selection:text-emerald-200">
       {/* 1. Header Toolbar */}
       <Header
         backendConnected={backendConnected}
@@ -377,13 +420,19 @@ export default function FaceNetDashboard() {
           {/* Stage 2: OSINT Web Match */}
           <OsintCard
             match={result?.match}
-            isLoading={isLoading && (phase === "RESOLVING_OSINT" || phase === "DETECTING")}
+            isLoading={
+              isLoading &&
+              (phase === "RESOLVING_OSINT" || phase === "DETECTING")
+            }
           />
 
           {/* Stage 3: EVM Ledger Proof */}
           <LedgerCard
             blockchain={result?.blockchain}
-            isLoading={isLoading && (phase === "ATTESTING_EVM" || phase === "RESOLVING_OSINT")}
+            isLoading={
+              isLoading &&
+              (phase === "ATTESTING_EVM" || phase === "RESOLVING_OSINT")
+            }
           />
         </div>
 

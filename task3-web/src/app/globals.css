@@ -19,21 +19,34 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-/* Developer Workbench Scrollbars */
+/* Cyberpunk Forensic Scrollbar */
 ::-webkit-scrollbar {
-  width: 5px;
-  height: 5px;
+  width: 6px;
+  height: 6px;
 }
 
+/* Track matches exact body dark base */
 ::-webkit-scrollbar-track {
-  background: #090d16;
+  background: #020605;
 }
 
+/* Minimal Neon Emerald Floating Thumb */
 ::-webkit-scrollbar-thumb {
-  background: #1e293b;
-  border-radius: 2px;
+  background: #0d2818;
+  border: 1px solid rgba(34, 197, 94, 0.35);
+  border-radius: 9999px;
+  transition: all 0.2s ease-in-out;
 }
 
+/* Active Neon Glow on Hover */
 ::-webkit-scrollbar-thumb:hover {
-  background: #334155;
+  background: #166534;
+  border-color: #22c55e;
+  box-shadow: 0 0 10px rgba(34, 197, 94, 0.6);
+}
+
+/* Firefox Support */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #0d2818 #020605;
 }
