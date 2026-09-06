@@ -93,6 +93,16 @@ Optional: specify a custom Ganache RPC endpoint:
 python run.py --cli --image path/to/image.jpg --rpc http://127.0.0.1:7545
 ```
 
+#### Testing Tamper Detection
+
+To test and demonstrate on-chain metadata tamper detection against an existing anchored block, pass `--spoof-author`:
+
+```bash
+python run.py --cli --image "path/to/image.jpg" --spoof-author "xyz"
+```
+
+This simulates an altered author claim against the on-chain genesis record in Ganache, triggering the `TAMPER_DETECTED` state and rendering a side-by-side diff.
+
 ---
 
 ## Project Structure

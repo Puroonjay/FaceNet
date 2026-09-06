@@ -30,6 +30,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 
 from blockchain_service import GANACHE_URL
+import pipeline_core
 from pipeline_core import (
     run_pipeline,
     get_or_deploy_contract,
@@ -156,10 +157,16 @@ if hasattr(sys.stdout, "reconfigure"):
         pass
 
 
-def run_cli_mode(image_path: str, rpc_url: str = GANACHE_URL):
+def run_cli_mode(
+    image_path: str,
+    rpc_url: str = GANACHE_URL,
+    args: Optional[argparse.Namespace] = None,
+):
     """
     Executes the pipeline in standalone CLI mode with clean developer terminal output.
     """
+    if args is None:
+        args = argparse.Namespace(spoof_author=None)
     path = Path(image_path)
     if not path.exists():
         print(f"error: image file not found: {image_path}", file=sys.stderr)
@@ -213,12 +220,15 @@ def run_cli_mode(image_path: str, rpc_url: str = GANACHE_URL):
 
     # Step 2: Reverse Visual Graph Lookup
     print("\n[osint] reverse visual graph resolver")
-    match_info = search_reverse_match(image_bytes)
-    source = match_info.get("source", "Web")
-    match_type = match_info.get("match_type", "Visual")
-    title = match_info.get("title", "No title metadata")
-    link = match_info.get("link", "")
-    author = match_info.get("author", "")
+    osint_metadata = search_reverse_match(image_bytes)
+    if args.spoof_author:
+        osint_metadata["author"] = args.spoof_author
+
+    source = osint_metadata.get("source", "Web")
+    match_type = osint_metadata.get("match_type", "Visual")
+    title = osint_metadata.get("title", "No title metadata")
+    link = osint_metadata.get("link", "")
+    author = osint_metadata.get("author", "")
 
     print(f"  source:         {source} ({match_type})")
     print(f"  title:          {title}")
@@ -230,12 +240,18 @@ def run_cli_mode(image_path: str, rpc_url: str = GANACHE_URL):
     print("\n[evm] blockchain ledger attestation")
     t0 = time.time()
     try:
-        pipeline_result = run_pipeline(
-            image_bytes=image_bytes,
-            contract_addr=contract_addr,
-            abi=abi,
-            rpc_url=rpc_url,
-        )
+        orig_search = pipeline_core.search_reverse_match
+        if args.spoof_author:
+            pipeline_core.search_reverse_match = lambda *a, **kw: dict(osint_metadata)
+        try:
+            pipeline_result = run_pipeline(
+                image_bytes=image_bytes,
+                contract_addr=contract_addr,
+                abi=abi,
+                rpc_url=rpc_url,
+            )
+        finally:
+            pipeline_core.search_reverse_match = orig_search
         elapsed = time.time() - t0
         blockchain = pipeline_result.get("blockchain", {})
         v_status = blockchain.get("verification_status", "VERIFIED")
@@ -302,6 +318,12 @@ def main():
         help="Path to image file (required when --cli is used)",
     )
     parser.add_argument(
+        "--spoof-author",
+        type=str,
+        default=None,
+        help="Simulate an altered author claim against an existing block",
+    )
+    parser.add_argument(
         "--rpc",
         type=str,
         default=GANACHE_URL,
@@ -326,7 +348,7 @@ def main():
         if not args.image:
             print("error: missing required argument: --image / -i <path_to_image>", file=sys.stderr)
             sys.exit(1)
-        run_cli_mode(image_path=args.image, rpc_url=args.rpc)
+        run_cli_mode(image_path=args.image, rpc_url=args.rpc, args=args)
     else:
         uvicorn.run(app, host=args.host, port=args.port)
 
