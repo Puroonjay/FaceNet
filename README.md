@@ -112,4 +112,11 @@ This simulates an altered author claim against the on-chain genesis record in Ga
 
 ---
 
+## Limitations
+
+* **Entity Indexing Constraint (Public Domain Scope):** The OSINT discovery engine relies on SerpApi / Google Lens visual indexing. Metadata resolution is optimized for publicly indexed entities, figures, and established web media. Non-public individuals or fresh, low-engagement personal uploads lack sufficient public graph data and will return unindexed/null metadata.
+* **Search Crawler Latency & PageRank Bias:** Web crawlers prioritize high-domain authority sites over real-time social media posts. Live search engines cannot provide real-time provenance for newly published media, which is why our system anchors original attestation directly to an immutable EVM ledger.
+
+---
+
 Maintained by Team WeHustlers.
