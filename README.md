@@ -6,6 +6,12 @@ FaceNet is a biometric verification and visual provenance tool. It detects faces
 
 ---
 
+## Architecture Flow
+
+![FaceNet Architecture Flow](flow.png)
+
+---
+
 ## Requirements
 
 - Python 3.10+

@@ -31,3 +31,4 @@ Test\ images/
 *.log
 .vscode/
 .idea/
+*.drawio
